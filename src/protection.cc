@@ -105,11 +105,13 @@ void VMEnv::LoadGDT(phys_addr_t base, size_t size) {
   desc.base = base;
   desc.limit = size - 1;
 
-  asm("lgdtl (%0)" : : "r"(&desc));
+  //asm("lgdtl (%0)" : : "r"(&desc));
+  (void)desc;
 }
 
 void VMEnv::LoadSegmentSelectors(int cs_index, int ds_index) {
   if (cs_index == 1 && ds_index == 2) {
+#if 0
     asm("movw $16, %ax\n"
         "movw %ax, %ds\n"
         "movw %ax, %es\n"
@@ -117,6 +119,7 @@ void VMEnv::LoadSegmentSelectors(int cs_index, int ds_index) {
         "movw %ax, %gs\n"
         "ljmp $8, $next\n"
         "next:\n");
+#endif
   } else {
     //LOG(FATAL) << "Invalid segment values" << cs_index << " " << ds_index;
   }

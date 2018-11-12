@@ -16,11 +16,13 @@ void kmain() {
   serial_init(SERIAL_COM1_BASE, 1);
   serial_printf(SERIAL_COM1_BASE, "Hello world\nThis is serial %d -- %p\n", sizeof(void*), fb);
 
-  VMEnv env;
-  VM vm(&env);
-  vm.Load();
+  fb.WriteString("Serial done\n", FrameBuffer::kBlack, FrameBuffer::kWhite);
 
-  serial_printf(SERIAL_COM1_BASE, "Protection setup worked?\n");
+  //VMEnv env;
+  //VM vm(&env);
+  //vm.Load();
+
+  //serial_printf(SERIAL_COM1_BASE, "Protection setup worked?\n");
 
   outb(0xf4, 0);
 }

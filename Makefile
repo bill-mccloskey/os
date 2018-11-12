@@ -1,41 +1,39 @@
-OBJECTS = loader.o kmain.o io_asm.o io.o serial.o framebuffer.o protection.o string.o
+OBJECTS = loader.o loader64.o multiboot_header.o kmain.o io.o serial.o framebuffer.o protection.o string.o
 CC = g++
-CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector \
+CFLAGS = -nostdlib -nostdinc -fno-builtin -fno-stack-protector \
          -nostartfiles -nodefaultlibs -Wall -Wextra -Werror -c -I/usr/lib/gcc/x86_64-linux-gnu/5/include -fno-rtti
-LDFLAGS = -T link.ld -melf_i386
+LDFLAGS = -n -T link.ld
 AS = nasm
-ASFLAGS = -f elf
+ASFLAGS = -f elf64
 
-all: kernel.elf
+all: build/kernel.elf
 
-kernel.elf: $(OBJECTS)
-	ld $(LDFLAGS) $(OBJECTS) -o kernel.elf
+build/kernel.elf: $(addprefix build/,$(OBJECTS))
+	ld $(LDFLAGS) $(addprefix build/,$(OBJECTS)) -o build/kernel.elf
 
-os.iso: kernel.elf
-	cp kernel.elf iso/boot/kernel.elf
-	genisoimage -R                              \
-	        -b boot/grub/stage2_eltorito    \
-	        -no-emul-boot                   \
-	        -boot-load-size 4               \
-	        -A os                           \
-	        -input-charset utf8             \
-	        -quiet                          \
-	        -boot-info-table                \
-	        -o os.iso                       \
-	        iso
+build/os.iso: build/kernel.elf grub.cfg
+	@mkdir -p build/iso/boot/grub
+	@cp build/kernel.elf build/iso/boot
+	@cp grub.cfg build/iso/boot/grub
+	grub-mkrescue /usr/lib/grub/i386-pc -o build/os.iso build/iso
+	@rm -r build/iso
 
-bochsrun: os.iso
+bochsrun: build/os.iso
 	bochs -f bochsrc.txt -q
 
-run: os.iso
-	qemu-system-i386 -cdrom os.iso -m 32 -nographic -serial mon:stdio \
+run: build/os.iso
+	qemu-system-x86_64 -cdrom build/os.iso -serial mon:stdio \
 	-device isa-debug-exit,iobase=0xf4,iosize=0x01 || true
 
-%.o: %.cc
+build/%.o: src/%.cc
 	$(CC) $(CFLAGS)  $< -o $@
 
-%.o: %.s
+build/%.o: src/%.c
+	$(CC) $(CFLAGS)  $< -o $@
+
+build/%.o: src/%.s
+	@mkdir -p build
 	$(AS) $(ASFLAGS) $< -o $@
 
 clean:
-	rm -rf *.o kernel.elf os.iso
+	rm -rf build
