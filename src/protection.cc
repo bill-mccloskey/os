@@ -1,4 +1,5 @@
 #include "protection.h"
+#include "serial.h"
 #include "string.h"
 
 namespace {
@@ -9,6 +10,14 @@ struct SegmentSelectorLayout {
   uint16_t index : 13;
 } __attribute__((packed));
 
+// The only fields used in long mode are:
+// - is_code_or_data
+// - descriptor_privilege_level
+// - present
+// - segment_long
+// - op_size_32_bits
+//
+// When segment_long=1, op_size_32_bits should be 0.
 struct SegmentDescriptorLayout {
   uint16_t limit_low;
   uint16_t base_low;
@@ -21,23 +30,28 @@ struct SegmentDescriptorLayout {
 
   uint8_t limit_high : 4;
   bool reserved : 1;
-  bool long_mode : 1;
+  bool segment_long : 1;
   bool op_size_32_bits : 1;
   bool page_granularity : 1;
 
   uint8_t base_high;
 } __attribute__((packed));
 
-struct TrapDescriptorLayout {
+// is_trap means interrupts are not disabled during the handler.
+struct InterruptDescriptorLayout {
   uint16_t offset_low;
-  uint16_t segment_selector;
+  SegmentSelector::Storage segment_selector;
 
-  uint8_t reserved : 1;
-  uint8_t type : 4;
+  uint8_t interrupt_stack : 3;
+  uint8_t reserved : 5;
+  bool is_trap : 1;
+  uint8_t must_be_one : 3;
+  uint8_t must_be_zero : 1;
   uint8_t descriptor_privilege_level : 2;
   bool present : 1;
 
-  uint16_t offset_high;
+  uint16_t offset_middle;
+  uint32_t offset_high;
 } __attribute__((packed));
 
 } // namespace
@@ -69,8 +83,8 @@ void SegmentDescriptor::Serialize(Storage storage) const {
   d.is_code_or_data = true;
   d.descriptor_privilege_level = required_priv_;
   d.present = true;
-  d.long_mode = false;
-  d.op_size_32_bits = true;
+  d.segment_long = segment_long_;
+  d.op_size_32_bits = !segment_long_;
   d.is_code_or_data = is_code_or_data_;
 
   if (last_byte_index_ > kByteGranularityMax) {
@@ -94,10 +108,26 @@ void SegmentDescriptor::Serialize(Storage storage) const {
   memcpy(storage, &d, sizeof(d));
 }
 
+void InterruptDescriptor::Serialize(Storage storage) const {
+  InterruptDescriptorLayout d = {};
+
+  d.offset_low = uint16_t(offset_);
+  segment_.Serialize(d.segment_selector);
+  d.interrupt_stack = interrupt_stack_;
+  d.is_trap = !disable_interrupts_;
+  d.must_be_one = 0x7;
+  d.descriptor_privilege_level = required_priv_;
+  d.present = true;
+  d.offset_middle = uint16_t(offset_ >> 16);
+  d.offset_high = uint32_t(offset_ >> 32);
+
+  memcpy(storage, &d, sizeof(d));
+}
+
 void VMEnv::LoadGDT(phys_addr_t base, size_t size) {
   struct Descriptor {
     uint16_t limit;
-    uint32_t base;
+    uint64_t base;
   } __attribute__((packed));
 
   Descriptor desc __attribute__((aligned(8)));
@@ -105,39 +135,55 @@ void VMEnv::LoadGDT(phys_addr_t base, size_t size) {
   desc.base = base;
   desc.limit = size - 1;
 
-  //asm("lgdtl (%0)" : : "r"(&desc));
-  (void)desc;
+  asm("lgdt (%0)" : : "r"(&desc));
 }
 
-void VMEnv::LoadSegmentSelectors(int cs_index, int ds_index) {
-  if (cs_index == 1 && ds_index == 2) {
-#if 0
-    asm("movw $16, %ax\n"
-        "movw %ax, %ds\n"
-        "movw %ax, %es\n"
-        "movw %ax, %fs\n"
-        "movw %ax, %gs\n"
-        "ljmp $8, $next\n"
-        "next:\n");
-#endif
-  } else {
-    //LOG(FATAL) << "Invalid segment values" << cs_index << " " << ds_index;
-  }
+void VMEnv::LoadIDT(phys_addr_t base, size_t size) {
+  struct Descriptor {
+    uint16_t limit;
+    uint64_t base;
+  } __attribute__((packed));
+
+  Descriptor desc __attribute__((aligned(8)));
+
+  desc.base = base;
+  desc.limit = size - 1;
+
+  asm("lidt (%0)" : : "r"(&desc));
 }
 
 VM::VM(VMEnv* env) : env_(env) {}
 
-void VM::AddEntry(const SegmentDescriptor& segdesc) {
-  segdesc.Serialize(gdt_[num_entries_++]);
+void VM::AddGDTEntry(const SegmentDescriptor& segdesc) {
+  segdesc.Serialize(gdt_[num_gdt_entries_++]);
+}
+
+void VM::AddIDTEntry(int number, const InterruptDescriptor& desc) {
+  desc.Serialize(idt_[number]);
+}
+
+struct InterruptHandlerEntry {
+  phys_addr_t handler;
+  int number;
+} __attribute__((packed));
+
+extern "C" {
+extern InterruptHandlerEntry interrupt_handler_table[];
+extern void load_cs_selector();
 }
 
 void VM::Load() {
-  // Add code segment
-  AddEntry(SegmentDescriptor().set_required_privileges(0).set_type(SegmentDescriptor::kCodeSegment));
+  AddGDTEntry(SegmentDescriptor().set_required_privileges(kKernelPrivilege).set_type(SegmentDescriptor::kCodeSegment));
+  AddGDTEntry(SegmentDescriptor().set_required_privileges(kUserPrivilege).set_type(SegmentDescriptor::kCodeSegment));
+  AddGDTEntry(SegmentDescriptor().set_required_privileges(kUserPrivilege).set_type(SegmentDescriptor::kDataSegment));
+  env_->LoadGDT(phys_addr_t(&gdt_), num_gdt_entries_ * sizeof(SegmentDescriptor::Storage));
 
-  // Add data segment
-  AddEntry(SegmentDescriptor().set_required_privileges(0).set_type(SegmentDescriptor::kDataSegment));
+  serial_printf(SERIAL_COM1_BASE, "Handler table = %p\n", interrupt_handler_table);
 
-  env_->LoadGDT(phys_addr_t(&gdt_), num_entries_ * sizeof(SegmentDescriptor::Storage));
-  env_->LoadSegmentSelectors(1, 2);
+  for (int i = 0; interrupt_handler_table[i].handler != 0; i++) {
+    const InterruptHandlerEntry& entry = interrupt_handler_table[i];
+    serial_printf(SERIAL_COM1_BASE, "Handler %d = %d/%p\n", i, entry.number, entry.handler);
+    AddIDTEntry(entry.number, InterruptDescriptor().set_offset(entry.handler));
+  }
+  env_->LoadIDT(phys_addr_t(&idt_), kNumIDTEntries * sizeof(InterruptDescriptor::Storage));
 }

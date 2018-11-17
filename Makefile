@@ -1,7 +1,19 @@
-OBJECTS = loader.o loader64.o multiboot_header.o kmain.o io.o serial.o framebuffer.o protection.o string.o
+OBJECTS = \
+	loader.o \
+	loader64.o \
+	multiboot_header.o \
+	kmain.o \
+	io.o \
+	serial.o \
+	framebuffer.o \
+	protection.o \
+	string.o \
+	interrupt_handlers.o \
+	interrupts.o
 CC = g++
-CFLAGS = -nostdlib -nostdinc -fno-builtin -fno-stack-protector \
-         -nostartfiles -nodefaultlibs -Wall -Wextra -Werror -c -I/usr/lib/gcc/x86_64-linux-gnu/5/include -fno-rtti
+CFLAGS = -nostdlib -nostdinc -fno-builtin -fno-stack-protector -mno-red-zone -ffreestanding -mcmodel=large \
+         -mno-mmx -mno-sse -mno-sse2 -nostartfiles -nodefaultlibs -fno-rtti \
+         -Wall -Wextra -Werror -c -I/usr/lib/gcc/x86_64-linux-gnu/5/include
 LDFLAGS = -n -T link.ld
 AS = nasm
 ASFLAGS = -f elf64

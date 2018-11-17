@@ -157,7 +157,16 @@ void serial_printf(unsigned int com, const char* fmt, ...) {
         case 'p': {
           void* x = va_arg(args, void*);
           char buf[32];
-          unsigned_to_string((long)x, buf, 16);
+          unsigned_to_string((unsigned long)x, buf, 16);
+          serial_write(com, "0x");
+          serial_write(com, buf);
+          break;
+        }
+
+        case 'x': {
+          unsigned x = va_arg(args, unsigned);
+          char buf[32];
+          unsigned_to_string(x, buf, 16);
           serial_write(com, "0x");
           serial_write(com, buf);
           break;

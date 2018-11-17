@@ -3,7 +3,7 @@
 global loader
 extern long_mode_start
 
-  KERNEL_STACK_SIZE equ 4096
+  KERNEL_STACK_SIZE equ 8192
   PAGE_SIZE equ 4096
 
 section .bss
@@ -31,6 +31,11 @@ section .text
 bits 32
 loader:
   mov esp, kernel_stack
+
+  ; We'll be passing the multiboot information to kmain. rdi is where
+  ; the first parameter to a function goes. We need to make sure not to
+  ; overwrite that register until kmain runs.
+  mov edi, ebx
 
   call check_multiboot
   call check_cpuid
@@ -108,12 +113,12 @@ check_long_mode:
 set_up_page_tables:
   ; map first P4 entry to P3 table
   mov eax, p3_table
-  or eax, 0b11 ; present + writable
+  or eax, 0b111 ; user-accessible + present + writable
   mov [p4_table], eax
 
   ; map first P3 entry to P2 table
   mov eax, p2_table
-  or eax, 0b11 ; present + writable
+  or eax, 0b111 ; user-accessible + present + writable
   mov [p3_table], eax
 
   ; map each P2 entry to a huge 2MiB page
@@ -123,7 +128,7 @@ set_up_page_tables:
   ; map ecx-th P2 entry to a huge page that starts at address 2MiB*ecx
   mov eax, 0x200000  ; 2MiB
   mul ecx            ; start address of ecx-th page
-  or eax, 0b10000011 ; present + writable + huge
+  or eax, 0b10000111 ; user-accessible + present + writable + huge
   mov [p2_table + ecx * 8], eax ; map ecx-th entry
 
   inc ecx            ; increase counter
