@@ -4,6 +4,7 @@ global some_code
 
 some_code:
   xchg bx, bx
+  int 0x80
 .loop:
   jmp .loop
 
@@ -87,6 +88,8 @@ handler_no_error 45
 handler_no_error 46
 handler_no_error 47
 
+handler_no_error 128
+
 align 8
 interrupt_handler_table:
   dq int0_handler
@@ -161,5 +164,7 @@ interrupt_handler_table:
   dd 46
   dq int47_handler
   dd 47
+  dq int128_handler
+  dd 128
   dq 0
   dd 0

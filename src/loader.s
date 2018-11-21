@@ -3,10 +3,10 @@
 global loader
 extern long_mode_start
 
-  KERNEL_STACK_SIZE equ 8192
+  KERNEL_STACK_SIZE equ 32768
   PAGE_SIZE equ 4096
 
-section .bss
+section .early_bss nobits
 align 4096
 p4_table:
   resb PAGE_SIZE
@@ -18,7 +18,7 @@ kernel_stack_bottom:
   resb KERNEL_STACK_SIZE
 kernel_stack:
 
-section .rodata
+section .early_rodata nowrite
 gdt64:
   dq 0 ; zero entry
 .code: equ $ - gdt64 ; new
@@ -27,7 +27,7 @@ gdt64:
   dw $ - gdt64 - 1
   dq gdt64
 
-section .text
+section .early_text exec
 bits 32
 loader:
   mov esp, kernel_stack
@@ -115,6 +115,11 @@ set_up_page_tables:
   mov eax, p3_table
   or eax, 0b111 ; user-accessible + present + writable
   mov [p4_table], eax
+
+  ; also map the P3 table to highmem
+  mov eax, p3_table
+  or eax, 0b111 ; user-accessible + present + writable
+  mov [p4_table + 2048], eax
 
   ; map first P3 entry to P2 table
   mov eax, p2_table

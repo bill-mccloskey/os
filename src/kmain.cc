@@ -1,39 +1,49 @@
+#include "frame_allocator.h"
 #include "framebuffer.h"
 #include "interrupts.h"
 #include "io.h"
+#include "multiboot.h"
 #include "protection.h"
 #include "serial.h"
 #include "types.h"
 
-struct MultibootTag {
-  uint32_t type;
-  uint32_t size;
-} __attribute__((packed));
+class MultibootPrintVisitor : public MultibootVisitor {
+  void StartTag(int type) override {
+    serial_printf(SERIAL_COM1_BASE, "  tag type = %u\n", type);
+  }
 
-struct MultibootHeader {
-  uint32_t total_size;
-  uint32_t reserved;
-} __attribute__((packed));
+  void Module(const char* label, uint32_t module_start, uint32_t module_end) override {
+    serial_printf(SERIAL_COM1_BASE, "    module %s: %p to %p\n", label, module_start, module_end);
+  }
+
+  void StartMemoryMap() override {
+    serial_printf(SERIAL_COM1_BASE, "    memory map\n");
+  }
+
+  void MemoryMapEntry(uint64_t base_addr, uint64_t length, MemoryMapEntryType type) override {
+    serial_printf(SERIAL_COM1_BASE, "    entry @%p size=%x, type=%d\n", base_addr, (unsigned)length, (int)type);
+  }
+};
+
+class MultibootMemoryMapVisitor : public MultibootVisitor {
+public:
+  MultibootMemoryMapVisitor(FrameAllocator* frame_allocator) : frame_allocator_(frame_allocator) {}
+
+  void MemoryMapEntry(uint64_t base_addr, uint64_t length, MemoryMapEntryType type) override {
+    if (type != MemoryMapEntryType::kAvailableRAM) return;
+    frame_allocator_->AddRegion(base_addr, base_addr + length);
+  }
+
+private:
+  FrameAllocator* frame_allocator_;
+};
 
 extern "C" {
 
-void ReadMultiboot(const MultibootHeader* multiboot_info) {
-  serial_printf(SERIAL_COM1_BASE, "Multiboot size = %u\n", multiboot_info->total_size);
+void kernel_physical_start();
+void kernel_physical_end();
 
-  const char* p = reinterpret_cast<const char*>(multiboot_info + 1);
-  const char* end = reinterpret_cast<const char*>(multiboot_info) + multiboot_info->total_size;
-
-  while (p < end) {
-    const MultibootTag* tag = reinterpret_cast<const MultibootTag*>(p);
-    serial_printf(SERIAL_COM1_BASE, "  tag type = %u, size = %u\n", tag->type, tag->size);
-
-    // Next tag will always be 8-byte aligned.
-    uint32_t size_with_padding = ((tag->size + 7) >> 3) << 3;
-    p += size_with_padding;
-  }
-}
-
-void kmain(const MultibootHeader* multiboot_info) {
+void kmain(const char* multiboot_info) {
   IoPorts io;
   FrameBuffer fb((char *) 0xB8000, &io);
 
@@ -44,7 +54,17 @@ void kmain(const MultibootHeader* multiboot_info) {
   serial_init(SERIAL_COM1_BASE, 1);
   serial_printf(SERIAL_COM1_BASE, "Hello world\nThis is serial %d -- %p\n", sizeof(void*), fb);
 
-  ReadMultiboot(multiboot_info);
+  serial_printf(SERIAL_COM1_BASE, "Kernel start = %p\n", (void *)kernel_physical_start);
+  serial_printf(SERIAL_COM1_BASE, "Kernel end = %p\n", (void *)kernel_physical_end);
+
+  MultibootReader multiboot_reader(multiboot_info);
+
+  MultibootPrintVisitor print_visitor;
+  multiboot_reader.Read(&print_visitor);
+
+  FrameAllocator allocator((phys_addr_t)(kernel_physical_start), phys_addr_t(kernel_physical_end));
+  MultibootMemoryMapVisitor mem_visitor(&allocator);
+  multiboot_reader.Read(&mem_visitor);
 
   fb.WriteString("Serial done\n", FrameBuffer::kBlack, FrameBuffer::kWhite);
 
@@ -61,7 +81,8 @@ void kmain(const MultibootHeader* multiboot_info) {
       "push %rax\n"
       "pushf\n"
       "push $0x13\n"
-      "push $some_code\n"
+      "movabs $some_code, %rax\n"
+      "push %rax\n"
       "iretq");
 
   asm("int $3");
@@ -74,11 +95,12 @@ void kmain(const MultibootHeader* multiboot_info) {
   asm("sti");
 
   // Goals:
-  // Get to user mode (CPL3) without actually being able to get back.
-  // To do this, I need to create a user-mode code segment.
-  // Then I need to do something elaborate to jump to it via the iret instruction.
-  // I'll just be jumping to some assembly code I write myself.
-  // I'll do so with interrupts disabled, and the code will just invoke the bochs debugger.
+  // Then I'll try to set up multiple threads. Each one will run code from
+  //   a GRUB module.
+  // I'll implement cooperative multitasking between these threads.
+  // They'll run in user-mode but have access to the entire address space.
+  // Then I'll try to set up page tables to cover each process and whatever I
+  //   need of the kernel. I'll switch when I switch processes.
 
   for (;;) {
     asm("hlt");

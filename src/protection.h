@@ -17,9 +17,9 @@ public:
       is_ldt_(is_ldt),
       selector_(selector) {}
 
-  using Storage = uint8_t[2];
+  using Storage = uint16_t;
 
-  void Serialize(Storage storage) const;
+  void Serialize(Storage* storage) const;
 
 private:
   int requested_priv_ = kKernelPrivilege;
@@ -32,6 +32,7 @@ public:
   enum Type {
     kCodeSegment,
     kDataSegment,
+    kTaskStateSegment,
   };
 
   SegmentDescriptor& set_segment_long(bool is_long) { segment_long_ = is_long; return *this; }
@@ -40,18 +41,17 @@ public:
 
   SegmentDescriptor& set_base(phys_addr_t base) { base_ = base; return *this; }
   SegmentDescriptor& set_size(size_t size) { last_byte_index_ = size - 1; return *this; }
-  SegmentDescriptor& set_system_segment() { is_code_or_data_ = false; return *this; }
   SegmentDescriptor& set_type(Type type) { type_ = type; return *this; }
 
   using Storage = uint8_t[8];
 
-  void Serialize(Storage storage) const;
+  // Returns the number of slots used by the descriptor. (A system descriptor uses two slots.)
+  int Serialize(uint8_t* dest) const;
 
 private:
   phys_addr_t base_ = 0;
   size_t last_byte_index_ = 0xffffffff;
   int required_priv_ = kUserPrivilege;
-  bool is_code_or_data_ = true; // false means a system segment
   bool present_ = true;
   Type type_ = kDataSegment;
   bool segment_long_ = true;
@@ -80,10 +80,36 @@ private:
   bool disable_interrupts_ = true;
 };
 
+class TaskStateSegment {
+public:
+  TaskStateSegment& set_privileged_stack(int index, phys_addr_t stack) {
+    // FIXME: Assert index < kNumPrivilegedStacks
+    privileged_stacks_[index] = stack;
+    return *this;
+  }
+  TaskStateSegment& set_interrupt_stack(int index, phys_addr_t stack) {
+    // FIXME: Assert index < kNumInterruptStacks
+    interrupt_stacks_[index] = stack;
+    return *this;
+  }
+
+  using Storage = uint8_t[104];
+
+  void Serialize(Storage storage) const;
+
+private:
+  static const int kNumPrivilegedStacks = 3;
+  static const int kNumInterruptStacks = 7;
+
+  phys_addr_t privileged_stacks_[3];
+  phys_addr_t interrupt_stacks_[7];
+};
+
 class VMEnv {
 public:
   virtual void LoadGDT(phys_addr_t base, size_t size);
   virtual void LoadIDT(phys_addr_t base, size_t size);
+  virtual void LoadTSS(const SegmentSelector& selector);
 };
 
 class VM {
@@ -102,8 +128,12 @@ private:
   SegmentDescriptor::Storage gdt_[kNumGDTEntries] __attribute__((aligned(8))) = {};
   int num_gdt_entries_ = 1;
 
-  static const int kNumIDTEntries = 64;
+  static const int kNumIDTEntries = 256;
   InterruptDescriptor::Storage idt_[kNumIDTEntries] __attribute__((aligned(8))) = {};
+
+  char syscall_stack_[8192];
+
+  TaskStateSegment::Storage tss_ __attribute__((aligned(8))) = {};
 };
 
 #endif  // protection_h

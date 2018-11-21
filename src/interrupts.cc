@@ -27,6 +27,10 @@ extern "C" {
 void kinterrupt(InterruptStackFrame* frame) {
   serial_printf(SERIAL_COM1_BASE, "Interrupt %d received: rip=%p, rsp=%p\n", frame->interrupt, frame->rip, frame->rsp);
 
+  if (frame->interrupt == 128) {
+    serial_printf(SERIAL_COM1_BASE, "Syscall!\n");
+  }
+
   // Timer
   if (frame->interrupt == 32) {
     outb(kPrimaryCommandPort, kEndOfInterruptCommand);

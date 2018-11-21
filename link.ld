@@ -3,29 +3,51 @@ ENTRY(loader)                /* the name of the entry label */
 SECTIONS {
     . = 1M;
 
+    kernel_physical_start = .;
+
     .boot :
     {
         *(.multiboot_header)
     }
 
-    .text ALIGN (0x1000) :   /* align at 4 KB */
+    .early_text :
     {
-        *(.text)             /* all text sections from all files */
+        *(.early_text)
     }
 
-    .rodata ALIGN (0x1000) : /* align at 4 KB */
+    .early_rodata :
     {
-        *(.rodata*)          /* all read-only data sections from all files */
+        *(.early_rodata)
     }
 
-    .data ALIGN (0x1000) :   /* align at 4 KB */
+    .early_bss ALIGN (0x1000) :
     {
-        *(.data)             /* all data sections from all files */
+        *(.early_bss)
     }
 
-    .bss ALIGN (0x1000) :    /* align at 4 KB */
+    . += 0xffff800000000000;
+
+    .text ALIGN (0x1000) : AT(ADDR(.text) - 0xffff800000000000)
     {
-        *(COMMON)            /* all COMMON sections from all files */
-        *(.bss)              /* all bss sections from all files */
+        /* Merges together sections for methods */
+        *(.text .text.*)
     }
+
+    .rodata ALIGN (0x1000) : AT(ADDR(.rodata) - 0xffff800000000000)
+    {
+        *(.rodata*)
+    }
+
+    .data ALIGN (0x1000) : AT(ADDR(.data) - 0xffff800000000000)
+    {
+        *(.data)
+    }
+
+    .bss ALIGN (0x1000) : AT(ADDR(.bss) - 0xffff800000000000)
+    {
+        *(COMMON)
+        *(.bss)
+    }
+
+    kernel_physical_end = . - 0xffff800000000000;
 }

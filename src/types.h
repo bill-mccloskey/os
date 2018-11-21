@@ -12,5 +12,7 @@ using size_t = unsigned long;
 using phys_addr_t = uintptr_t;
 using virt_addr_t = uintptr_t;
 
+static const int kPageSize = 4096;
+
 #endif  // types_h
 
