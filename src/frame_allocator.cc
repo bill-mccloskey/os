@@ -1,9 +1,13 @@
 #include "frame_allocator.h"
 #include "page_translation.h"
 
+#include "assert.h"
+
+FrameAllocator* g_frame_allocator;
+
 void FrameAllocator::AddRegion(phys_addr_t start_addr, phys_addr_t end_addr) {
-  // assert_eq(start_addr & (kPageSize - 1), 0);
-  // assert_eq(end_addr & (kPageSize - 1), 0);
+  assert_eq(start_addr & (kPageSize - 1), 0);
+  assert_eq(end_addr & (kPageSize - 1), 0);
 
   regions_[num_regions_].start_addr = start_addr;
   regions_[num_regions_].end_addr = end_addr;
@@ -29,8 +33,7 @@ phys_addr_t FrameAllocator::AllocateFrame() {
   if (cur_addr_ == regions_[cur_region_].end_addr) {
     cur_region_++;
     if (cur_region_ == num_regions_) {
-      // Out of memory!
-      for (;;) {}
+      panic("Out of memory");
     }
 
     cur_addr_ = regions_[cur_region_].start_addr;

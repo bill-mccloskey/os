@@ -1,18 +1,11 @@
 #include "interrupts.h"
 
+#include "assert.h"
+
 #include "io.h"
 #include "serial.h"
+#include "thread.h"
 #include "types.h"
-
-struct InterruptStackFrame {
-  uint64_t interrupt;
-  uint64_t error_code;
-  virt_addr_t rip;
-  uint64_t code_segment;
-  uint64_t rflags;
-  phys_addr_t rsp;
-  uint64_t stack_segment;
-} __attribute__((packed));
 
 static const int kPrimaryCommandPort = 0x20;
 static const int kPrimaryDataPort = 0x21;
@@ -24,29 +17,41 @@ static const int kEndOfInterruptCommand = 0x20;
 
 extern "C" {
 
-void kinterrupt(InterruptStackFrame* frame) {
-  serial_printf(SERIAL_COM1_BASE, "Interrupt %d received: rip=%p, rsp=%p\n", frame->interrupt, frame->rip, frame->rsp);
-
-  if (frame->interrupt == 128) {
-    serial_printf(SERIAL_COM1_BASE, "Syscall!\n");
+void kinterrupt(int64_t interrupt_number, uint64_t error_code) {
+  if (interrupt_number == 128) {
+    ThreadState* thread = g_scheduler->current_thread_state();
+    if (thread->rdi == 1) {
+      char c = thread->rsi;
+      g_serial->WriteByte(c);
+    } else if (thread->rdi == 2) {
+      g_scheduler->Reschedule();
+    } else {
+      panic("Unknown syscall");
+    }
+    return;
   }
 
+  g_serial->Printf("Interrupt %d received\n", interrupt_number);
+
   // Timer
-  if (frame->interrupt == 32) {
+  if (interrupt_number == 32) {
     outb(kPrimaryCommandPort, kEndOfInterruptCommand);
   }
 
   // Keyboard
-  if (frame->interrupt == 33) {
+  if (interrupt_number == 33) {
     unsigned char scan_code = inb(0x60);
-    serial_printf(SERIAL_COM1_BASE, "Keyboard scancode = %u\n", scan_code);
+    g_serial->Printf("Keyboard scancode = %u\n", scan_code);
     outb(kPrimaryCommandPort, kEndOfInterruptCommand);
   }
 
   // GPF
-  if (frame->interrupt == 13) {
-    serial_printf(SERIAL_COM1_BASE, "GPF\n");
-    asm("hlt");
+  if (interrupt_number == 13) {
+    g_serial->Printf("GPF: error=%u\n", uint32_t(error_code));
+    g_scheduler->DumpState();
+    for (;;) {
+      asm("hlt");
+    }
   }
 }
 
@@ -56,7 +61,7 @@ void InterruptController::Init() {
   unsigned char mask1 = io_->In(kPrimaryDataPort);
   unsigned char mask2 = io_->In(kSecondaryDataPort);
 
-  serial_printf(SERIAL_COM1_BASE, "Interrupt masks = %x/%x\n", mask1, mask2);
+  g_serial->Printf("Interrupt masks = %x/%x\n", mask1, mask2);
 
   const int kICW1_Init = 0x10;
   const int kICW1_ICW4 = 0x01;

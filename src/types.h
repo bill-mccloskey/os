@@ -6,6 +6,8 @@ using uint16_t = unsigned short;
 using uint32_t = unsigned int;
 using uint64_t = unsigned long;
 
+using int64_t = long;
+
 using uintptr_t = unsigned long;
 using size_t = unsigned long;
 

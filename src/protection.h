@@ -1,6 +1,7 @@
 #ifndef protection_h
 #define protection_h
 
+#include "frame_allocator.h"
 #include "types.h"
 
 const int kKernelPrivilege = 0;
@@ -118,6 +119,9 @@ public:
 
   void Load();
 
+  phys_addr_t syscall_stack() const { return syscall_stack_; }
+  phys_addr_t syscall_stack_top() const { return syscall_stack_ + kPageSize; }
+
 private:
   void AddGDTEntry(const SegmentDescriptor& segdesc);
   void AddIDTEntry(int number, const InterruptDescriptor& desc);
@@ -131,9 +135,11 @@ private:
   static const int kNumIDTEntries = 256;
   InterruptDescriptor::Storage idt_[kNumIDTEntries] __attribute__((aligned(8))) = {};
 
-  char syscall_stack_[8192];
+  phys_addr_t syscall_stack_;
 
   TaskStateSegment::Storage tss_ __attribute__((aligned(8))) = {};
 };
+
+extern VM* g_vm;
 
 #endif  // protection_h

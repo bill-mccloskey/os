@@ -12,6 +12,11 @@ long_mode_start:
   mov fs, ax
   mov gs, ax
 
+  ; relocate the stack pointer and the multiboot header to highmem
+  mov rax, 0xffff800000000000
+  add rsp, rax
+  add rdi, rax
+
   ; call the rust main
   mov rax, kmain
   call rax

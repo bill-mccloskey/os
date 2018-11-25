@@ -34,4 +34,6 @@ private:
   phys_addr_t free_pages_ = 0;
 };
 
+extern FrameAllocator* g_frame_allocator;
+
 #endif

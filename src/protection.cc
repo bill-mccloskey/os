@@ -1,6 +1,11 @@
 #include "protection.h"
+
+#include "frame_allocator.h"
 #include "serial.h"
 #include "string.h"
+#include "thread.h"
+
+VM* g_vm;
 
 namespace {
 
@@ -200,12 +205,13 @@ void VMEnv::LoadIDT(phys_addr_t base, size_t size) {
 void VMEnv::LoadTSS(const SegmentSelector& selector) {
   SegmentSelector::Storage storage;
   selector.Serialize(&storage);
-  asm("xchg %%bx, %%bx\n"
-      "mov %0, %%ax\n"
+  asm("mov %0, %%ax\n"
       "ltr %%ax" : : "r"(storage));
 }
 
-VM::VM(VMEnv* env) : env_(env) {}
+VM::VM(VMEnv* env) : env_(env) {
+  syscall_stack_ = g_frame_allocator->AllocateFrame();
+}
 
 void VM::AddGDTEntry(const SegmentDescriptor& segdesc) {
   num_gdt_entries_ += segdesc.Serialize(gdt_[num_gdt_entries_]);
@@ -237,7 +243,8 @@ void VM::Load() {
 
   // TSS.
   TaskStateSegment tss;
-  tss.set_privileged_stack(0, phys_addr_t(syscall_stack_ + sizeof(syscall_stack_)));
+  // FIXME: This is gross that protection needs to know what the layout used by the scheduler is.
+  tss.set_privileged_stack(0, syscall_stack_ + kPageSize - sizeof(CpuState));
   tss.Serialize(tss_);
 
   SegmentDescriptor tss_desc;
@@ -250,11 +257,11 @@ void VM::Load() {
 
   env_->LoadTSS(SegmentSelector(4));
 
-  serial_printf(SERIAL_COM1_BASE, "Handler table = %p\n", interrupt_handler_table);
+  g_serial->Printf("Handler table = %p\n", interrupt_handler_table);
 
   for (int i = 0; interrupt_handler_table[i].handler != 0; i++) {
     const InterruptHandlerEntry& entry = interrupt_handler_table[i];
-    serial_printf(SERIAL_COM1_BASE, "Handler %d = %d/%p\n", i, entry.number, entry.handler);
+    g_serial->Printf("Handler %d = %d/%p\n", i, entry.number, entry.handler);
     AddIDTEntry(entry.number, InterruptDescriptor().set_offset(entry.handler));
   }
   env_->LoadIDT(phys_addr_t(&idt_), kNumIDTEntries * sizeof(InterruptDescriptor::Storage));

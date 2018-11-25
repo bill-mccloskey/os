@@ -1,4 +1,6 @@
 KERNEL_OBJECTS = \
+	assert.o \
+	elf.o \
 	loader.o \
 	loader64.o \
 	multiboot_header.o \
@@ -10,8 +12,10 @@ KERNEL_OBJECTS = \
 	frame_allocator.o \
 	protection.o \
 	string.o \
+	syscall.o \
 	interrupt_handlers.o \
-	interrupts.o
+	interrupts.o \
+	thread.o
 
 PROGRAM_OBJECTS = \
 	program.o
@@ -20,7 +24,7 @@ CC = g++
 CFLAGS = -nostdlib -nostdinc -fno-builtin -fno-stack-protector -mno-red-zone -ffreestanding -mcmodel=large \
          -mno-mmx -mno-sse -mno-sse2 -nostartfiles -nodefaultlibs -fno-rtti \
          -fomit-frame-pointer -fno-exceptions -fno-asynchronous-unwind-tables -fno-unwind-tables \
-         -Wall -Wextra -Werror -Wno-unused-parameter -c -I/usr/lib/gcc/x86_64-linux-gnu/5/include
+         -Wall -Wextra -Werror -Wno-unused-parameter -I/usr/lib/gcc/x86_64-linux-gnu/5/include
 LDFLAGS = -n -T link.ld
 AS = nasm
 ASFLAGS = -f elf64
@@ -30,8 +34,8 @@ all: build/kernel.elf build/program.elf
 build/kernel.elf: $(addprefix build/,$(KERNEL_OBJECTS))
 	ld $(LDFLAGS) $(addprefix build/,$(KERNEL_OBJECTS)) -o $@
 
-build/program.elf: src/program.s
-	nasm -f bin src/program.s -o build/program.elf
+build/program.elf: src/program/program.cc
+	$(CC) $(CFLAGS) $< -o $@
 
 build/os.iso: build/kernel.elf grub.cfg
 	@mkdir -p build/iso/boot/grub
@@ -50,10 +54,8 @@ run: build/os.iso
 	-device isa-debug-exit,iobase=0xf4,iosize=0x01 || true
 
 build/%.o: src/%.cc
-	$(CC) $(CFLAGS)  $< -o $@
-
-build/%.o: src/%.c
-	$(CC) $(CFLAGS)  $< -o $@
+	@mkdir -p build
+	$(CC) $(CFLAGS)  -c $< -o $@
 
 build/%.o: src/%.s
 	@mkdir -p build

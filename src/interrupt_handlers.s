@@ -1,6 +1,28 @@
 extern kinterrupt
 global interrupt_handler_table
-global some_code
+global scheduler_start
+
+struc thread_state
+ts_rip: resb 8
+ts_cs: resb 8
+ts_rflags: resb 8
+ts_rsp: resb 8
+ts_ss: resb 8
+ts_rax: resb 8
+ts_rcx: resb 8
+ts_rdx: resb 8
+ts_rsi: resb 8
+ts_rdi: resb 8
+ts_r8: resb 8
+ts_r9: resb 8
+ts_r10: resb 8
+ts_r11: resb 8
+endstruc
+
+struc cpu_state
+cpu_current_thread: resb 8
+cpu_previous_thread: resb 8
+endstruc
 
 some_code:
   xchg bx, bx
@@ -23,30 +45,78 @@ int%1_handler:
   jmp common_interrupt_handler
 %endmacro
 
+; This code is called at boot time to start scheduling.
+; On function entry, rdi contains the ThreadState for the thread to start.
+scheduler_start:
+  push qword[rdi + ts_ss]
+  push qword[rdi + ts_rsp]
+  push qword[rdi + ts_rflags]
+  push qword[rdi + ts_cs]
+  push qword[rdi + ts_rip]
+  iretq
+
 common_interrupt_handler:
-  ;xchg bx, bx
+  ; Bochs debugging instruction.
+  xchg bx, bx
+
+  ; Push rax so we have a free register to work with.
   push rax
-  push rcx
-  push rdx
-  push rsi
-  push rdi
-  push r8
-  push r9
-  push r10
-  push r11
-  mov rdi, rsp
-  add rdi, 72
+
+  ; Layout of the stack at this time:
+  ; INTERRUPT_STACK_HIGH: (the top of the page allocated for interrupts)
+  ;   CpuState::previous_thread [rsp + 72]
+  ;   CpuState::current_thread [rsp + 64]
+  ;   ss [rsp + 56]
+  ;   rsp [rsp + 48]
+  ;   rflags [rsp + 40]
+  ;   cs [rsp + 32]
+  ;   rip [rsp + 24]
+  ;   error_code [rsp + 16]
+  ;   interrupt_number [rsp + 8]
+  ;   saved rax [rsp + 0]
+
+  mov rax, qword[rsp + 64]      ; Store CpuState::current_thread in rax
+  pop qword[rax + ts_rax]       ; Copy the saved rax value to the ThreadState
+  mov qword[rax + ts_rdi], rdi  ; Save rdi and rsi to the ThreadState. These will be used for kinterrupt parameters.
+  mov qword[rax + ts_rsi], rsi
+  pop rdi                       ; Copy the interrupt number to rdi, the first kinterrupt parameter.
+  pop rsi                       ; Copy the error code to rsi, second kinterrupt parameter.
+  pop qword[rax + ts_rip]
+  pop qword[rax + ts_cs]
+  pop qword[rax + ts_rflags]
+  pop qword[rax + ts_rsp]
+  pop qword[rax + ts_ss]
+  mov qword[rax + ts_rcx], rcx
+  mov qword[rax + ts_rdx], rdx
+  mov qword[rax + ts_r8], r8
+  mov qword[rax + ts_r9], r9
+  mov qword[rax + ts_r10], r10
+  mov qword[rax + ts_r11], r11
+
+  ; Call kinterrupt(interrupt_number, error_code)
   call kinterrupt
-  pop r11
-  pop r10
-  pop r9
-  pop r8
-  pop rdi
-  pop rsi
-  pop rdx
-  pop rcx
-  pop rax
-  add rsp, 16
+  ; kinterrupt returns nothing in rax.
+
+  ; Layout of the stack at this time:
+  ; INTERRUPT_STACK_HIGH:
+  ;   CpuState::previous_thread [rsp + 8]
+  ;   CpuState::current_thread [rsp + 0]
+
+  mov rax, qword[rsp]           ; Copy CpuState::current_thread to rax
+  mov rcx, qword[rax + ts_rcx]
+  mov rdx, qword[rax + ts_rdx]
+  mov rsi, qword[rax + ts_rsi]
+  mov rdi, qword[rax + ts_rdi]
+  mov r8, qword[rax + ts_r8]
+  mov r9, qword[rax + ts_r9]
+  mov r10, qword[rax + ts_r10]
+  mov r11, qword[rax + ts_r11]
+  push qword[rax + ts_ss]
+  push qword[rax + ts_rsp]
+  push qword[rax + ts_rflags]
+  push qword[rax + ts_cs]
+  push qword[rax + ts_rip]
+  mov rax, qword[rax + ts_rax]
   iretq
 
 handler_no_error 0
