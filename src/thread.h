@@ -32,7 +32,11 @@ struct CpuState {
 
 class Thread {
 public:
-  Thread(virt_addr_t start_func, int priority);
+  Thread(virt_addr_t start_func,
+         virt_addr_t stack_ptr,
+         phys_addr_t page_tables,
+         int priority,
+         bool kernel_thread = false);
 
   void Start();
 
@@ -49,8 +53,9 @@ private:
 
   ThreadState state_;
   virt_addr_t start_func_;
-  phys_addr_t stack_;
+  phys_addr_t page_tables_;
   int priority_;
+  bool kernel_thread_;
   Status status_ = kBlocked;
   Thread* next_thread_ = nullptr;
   Thread* prev_thread_ = nullptr;
@@ -64,7 +69,9 @@ public:
   void Start();
 
   // Schedules a different thread to run upon returning to user space.
-  void Reschedule();
+  void Reschedule(bool requeue = true);
+
+  void ExitThread();
 
   // For debugging. Dumps to serial port.
   void DumpState();

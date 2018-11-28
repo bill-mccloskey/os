@@ -9,6 +9,12 @@ void FrameAllocator::AddRegion(phys_addr_t start_addr, phys_addr_t end_addr) {
   assert_eq(start_addr & (kPageSize - 1), 0);
   assert_eq(end_addr & (kPageSize - 1), 0);
 
+  // It's not a good idea to treat 0 as an allocated page.
+  if (start_addr == 0) {
+    start_addr += kPageSize;
+    if (start_addr >= end_addr) return;
+  }
+
   regions_[num_regions_].start_addr = start_addr;
   regions_[num_regions_].end_addr = end_addr;
 

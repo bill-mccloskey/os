@@ -1,20 +1,21 @@
 KERNEL_OBJECTS = \
 	assert.o \
 	elf.o \
+	framebuffer.o \
+	frame_allocator.o \
+	interrupt_handlers.o \
+	interrupts.o \
+	io.o \
+	kmain.o \
 	loader.o \
 	loader64.o \
 	multiboot_header.o \
 	multiboot.o \
-	kmain.o \
-	io.o \
-	serial.o \
-	framebuffer.o \
-	frame_allocator.o \
+	page_tables.o \
 	protection.o \
+	serial.o \
 	string.o \
 	syscall.o \
-	interrupt_handlers.o \
-	interrupts.o \
 	thread.o
 
 PROGRAM_OBJECTS = \
@@ -37,7 +38,7 @@ build/kernel.elf: $(addprefix build/,$(KERNEL_OBJECTS))
 build/program.elf: src/program/program.cc
 	$(CC) $(CFLAGS) $< -o $@
 
-build/os.iso: build/kernel.elf grub.cfg
+build/os.iso: build/kernel.elf build/program.elf grub.cfg
 	@mkdir -p build/iso/boot/grub
 	@mkdir -p build/iso/modules
 	@cp build/kernel.elf build/iso/boot

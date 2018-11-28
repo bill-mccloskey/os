@@ -5,9 +5,12 @@
 #include "io.h"
 #include "lazy_global.h"
 #include "multiboot.h"
+#include "page_tables.h"
 #include "page_translation.h"
+#include "placement_new.h"
 #include "protection.h"
 #include "serial.h"
+#include "string.h"
 #include "thread.h"
 #include "types.h"
 
@@ -44,73 +47,89 @@ private:
 
 class ElfLoaderVisitor : public ElfVisitor {
 public:
+  ElfLoaderVisitor(PageTableManager* tables) : tables_(tables) {}
+
   void LoadSegment(int flags, const char* data, size_t size, virt_addr_t load_addr, size_t load_size) override {
-    g_serial->Printf("  Would load segment (flags=%d) at %p, size=%d\n", flags, load_addr, (int)size);
+    g_serial->Printf("  Would load segment (flags=%d) at %p, size=%d/%d\n", flags, load_addr, (int)size, (int)load_size);
+
+    assert_le(size, load_size);
+
+    PageAttributes attrs;
+
+    phys_addr_t phys_start = VirtualToPhysical(reinterpret_cast<virt_addr_t>(data));
+    assert_eq(phys_start & (kPageSize - 1), 0);
+
+    phys_addr_t phys_end = phys_start + size;
+    phys_end = (phys_end + kPageSize - 1) & ~(kPageSize - 1);
+
+    virt_addr_t virt_start = load_addr;
+    virt_addr_t virt_end = virt_start + size;
+    virt_end = (virt_end + kPageSize - 1) & ~(kPageSize - 1);
+    tables_->Map(phys_start, phys_end, virt_start, virt_end, attrs);
+
+    if (load_size == size) return;
+
+    // Need to zero-initialize the rest.
+    size_t remainder = load_size - (phys_end - phys_start);
+    remainder = (remainder + kPageSize - 1) & ~(kPageSize - 1);
+
+    for (size_t bytes = 0; bytes < remainder; bytes += kPageSize) {
+      virt_start = virt_end;
+      virt_end += kPageSize;
+
+      phys_start = g_frame_allocator->AllocateFrame();
+      phys_end = phys_start + kPageSize;
+      memset(reinterpret_cast<void*>(PhysicalToVirtual(phys_start)), 0, kPageSize);
+
+      tables_->Map(phys_start, phys_end, virt_start, virt_end, attrs);
+    }
   }
+
+private:
+  PageTableManager* tables_;
 };
 
 class MultibootLoaderVisitor : public MultibootVisitor {
 public:
+  MultibootLoaderVisitor(PageTableManager* tables) : tables_(tables) {}
+
   void Module(const char* label, uint32_t module_start, uint32_t module_end) override {
     virt_addr_t start_addr = PhysicalToVirtual(module_start);
     size_t size = module_end - module_start;
     const char* data = reinterpret_cast<const char*>(start_addr);
     ElfReader reader(data, size);
 
-    ElfLoaderVisitor loader_visitor;
+    ElfLoaderVisitor loader_visitor(tables_);
     reader.Read(&loader_visitor);
+
+    // Map in a stack.
+    const virt_addr_t kStackBase = virt_addr_t(0x7ffffffff000);
+    phys_addr_t program_stack = g_frame_allocator->AllocateFrame();
+    tables_->Map(program_stack, program_stack + kPageSize,
+                 kStackBase, kStackBase + kPageSize,
+                 PageAttributes());
+
+    // Map kernel memory.
+    const size_t kMaxRAMSize = 1 << 21;
+    tables_->Map(0, kMaxRAMSize, kKernelVirtualStart, kKernelVirtualStart + kMaxRAMSize, PageAttributes());
+
+    phys_addr_t thread_phys = g_frame_allocator->AllocateFrame();
+    void* thread_mem = reinterpret_cast<void*>(PhysicalToVirtual(thread_phys));
+    Thread* thread = new (thread_mem) Thread(reader.entry_point(), kStackBase + kPageSize,
+                                             tables_->table_root(), 0);
+    thread->Start();
   }
+
+private:
+  PageTableManager* tables_;
 };
 
-extern "C" {
-uint64_t syscall(uint64_t number, uint64_t arg1 = 0, uint64_t arg2 = 0, uint64_t arg3 = 0,
-                 uint64_t arg4 = 0, uint64_t arg5 = 0);
-}
-
-void UserThread1() {
+void IdleTask() {
   //asm("xchg %bx, %bx");
 
-  syscall(1, 'H');
-  syscall(1, 'i');
-  syscall(1, '1');
-  syscall(1, '!');
-  syscall(1, '\n');
-
-  syscall(2);
-
-  syscall(1, 'B');
-  syscall(1, 'y');
-  syscall(1, 'e');
-  syscall(1, '1');
-  syscall(1, '\n');
-
-  syscall(2);
-
-  //asm("xchg %bx, %bx");
-
-  for (;;) {}
-}
-
-void UserThread2() {
-  //asm("xchg %bx, %bx");
-
-  syscall(1, 'H');
-  syscall(1, 'i');
-  syscall(1, '2');
-  syscall(1, '!');
-  syscall(1, '\n');
-
-  syscall(2);
-
-  syscall(1, 'B');
-  syscall(1, 'y');
-  syscall(1, 'e');
-  syscall(1, '2');
-  syscall(1, '\n');
-
-  //asm("xchg %bx, %bx");
-
-  for (;;) {}
+  for (;;) {
+    asm("hlt");
+  }
 }
 
 static LazyGlobal<SerialPort> serial_port;
@@ -145,15 +164,7 @@ void kmain(const char* multiboot_info) {
   multiboot_reader.Read(&print_visitor);
 
   frame_allocator.emplace(phys_addr_t(kernel_physical_start), phys_addr_t(kernel_physical_end));
-  MultibootMemoryMapVisitor mem_visitor(&frame_allocator.value());
-  multiboot_reader.Read(&mem_visitor);
-
-  MultibootLoaderVisitor load_visitor;
-  multiboot_reader.Read(&load_visitor);
-
   g_frame_allocator = &frame_allocator.value();
-
-  fb.WriteString("Serial done\n", FrameBuffer::kBlack, FrameBuffer::kWhite);
 
   VMEnv env;
   vm.emplace(&env);
@@ -172,11 +183,25 @@ void kmain(const char* multiboot_info) {
   scheduler.emplace();
   g_scheduler = &scheduler.value();
 
-  Thread user_thread1(virt_addr_t(&UserThread1), 0);
-  user_thread1.Start();
+  MultibootMemoryMapVisitor mem_visitor(&frame_allocator.value());
+  multiboot_reader.Read(&mem_visitor);
 
-  Thread user_thread2(virt_addr_t(&UserThread2), 0);
-  user_thread2.Start();
+  PageTableManager tables;
+  MultibootLoaderVisitor load_visitor(&tables);
+  multiboot_reader.Read(&load_visitor);
+
+  PageTableManager idle_tables;
+  const size_t kMaxRAMSize = 1 << 21;
+  idle_tables.Map(0, kMaxRAMSize, kKernelVirtualStart, kKernelVirtualStart + kMaxRAMSize, PageAttributes());
+
+  const virt_addr_t kStackBase = virt_addr_t(0x7ffffffff000);
+  phys_addr_t program_stack = g_frame_allocator->AllocateFrame();
+  idle_tables.Map(program_stack, program_stack + kPageSize,
+                  kStackBase, kStackBase + kPageSize,
+                  PageAttributes());
+
+  Thread idle_task(virt_addr_t(&IdleTask), kStackBase + kPageSize - 8, idle_tables.table_root(), 2, true);
+  idle_task.Start();
 
   scheduler->Start();
 

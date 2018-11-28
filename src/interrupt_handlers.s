@@ -1,6 +1,7 @@
 extern kinterrupt
 global interrupt_handler_table
 global scheduler_start
+global switch_address_space
 
 struc thread_state
 ts_rip: resb 8
@@ -23,12 +24,6 @@ struc cpu_state
 cpu_current_thread: resb 8
 cpu_previous_thread: resb 8
 endstruc
-
-some_code:
-  xchg bx, bx
-  int 0x80
-.loop:
-  jmp .loop
 
 %macro handler_no_error 1
 global int%1_handler
@@ -54,6 +49,10 @@ scheduler_start:
   push qword[rdi + ts_cs]
   push qword[rdi + ts_rip]
   iretq
+
+switch_address_space:
+  mov cr3, rdi
+  ret
 
 common_interrupt_handler:
   ; Bochs debugging instruction.
@@ -117,6 +116,9 @@ common_interrupt_handler:
   push qword[rax + ts_cs]
   push qword[rax + ts_rip]
   mov rax, qword[rax + ts_rax]
+
+  xchg bx, bx
+
   iretq
 
 handler_no_error 0

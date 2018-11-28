@@ -8,6 +8,10 @@ header_start:
 
   ; insert optional multiboot tags here
 
+  dw 6                          ; Module alignment tag
+  dw 0                          ; Flags
+  dd 8                          ; Size
+
   ; required end tag
   dw 0    ; type
   dw 0    ; flags

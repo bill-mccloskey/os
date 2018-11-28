@@ -1,6 +1,7 @@
 #include "protection.h"
 
 #include "frame_allocator.h"
+#include "page_translation.h"
 #include "serial.h"
 #include "string.h"
 #include "thread.h"
@@ -79,14 +80,16 @@ struct TaskStateSegmentLayout {
 
 } // namespace
 
-void SegmentSelector::Serialize(Storage* storage) const {
+SegmentSelector::Storage SegmentSelector::Serialize() const {
   SegmentSelectorLayout d = {};
 
   d.requested_privilege_level = requested_priv_;
   d.is_ldt = is_ldt_;
   d.index = selector_;
 
-  memcpy(storage, &d, sizeof(d));
+  Storage storage;
+  memcpy(&storage, &d, sizeof(d));
+  return storage;
 }
 
 int SegmentDescriptor::Serialize(uint8_t* storage) const {
@@ -146,7 +149,7 @@ void InterruptDescriptor::Serialize(Storage storage) const {
   InterruptDescriptorLayout d = {};
 
   d.offset_low = uint16_t(offset_);
-  segment_.Serialize(&d.segment_selector);
+  d.segment_selector = segment_.Serialize();
   d.interrupt_stack = interrupt_stack_;
   d.is_trap = !disable_interrupts_;
   d.must_be_one = 0x7;
@@ -174,7 +177,7 @@ void TaskStateSegment::Serialize(Storage storage) const {
   memcpy(storage, &d, sizeof(d));
 }
 
-void VMEnv::LoadGDT(phys_addr_t base, size_t size) {
+void VMEnv::LoadGDT(virt_addr_t base, size_t size) {
   struct Descriptor {
     uint16_t limit;
     uint64_t base;
@@ -188,7 +191,7 @@ void VMEnv::LoadGDT(phys_addr_t base, size_t size) {
   asm("lgdt (%0)" : : "r"(&desc));
 }
 
-void VMEnv::LoadIDT(phys_addr_t base, size_t size) {
+void VMEnv::LoadIDT(virt_addr_t base, size_t size) {
   struct Descriptor {
     uint16_t limit;
     uint64_t base;
@@ -203,8 +206,7 @@ void VMEnv::LoadIDT(phys_addr_t base, size_t size) {
 }
 
 void VMEnv::LoadTSS(const SegmentSelector& selector) {
-  SegmentSelector::Storage storage;
-  selector.Serialize(&storage);
+  SegmentSelector::Storage storage = selector.Serialize();
   asm("mov %0, %%ax\n"
       "ltr %%ax" : : "r"(storage));
 }
@@ -213,8 +215,8 @@ VM::VM(VMEnv* env) : env_(env) {
   syscall_stack_ = g_frame_allocator->AllocateFrame();
 }
 
-void VM::AddGDTEntry(const SegmentDescriptor& segdesc) {
-  num_gdt_entries_ += segdesc.Serialize(gdt_[num_gdt_entries_]);
+void VM::AddGDTEntry(int number, const SegmentDescriptor& segdesc) {
+  segdesc.Serialize(gdt_[number]);
 }
 
 void VM::AddIDTEntry(int number, const InterruptDescriptor& desc) {
@@ -222,7 +224,7 @@ void VM::AddIDTEntry(int number, const InterruptDescriptor& desc) {
 }
 
 struct InterruptHandlerEntry {
-  phys_addr_t handler;
+  virt_addr_t handler;
   int number;
 } __attribute__((packed));
 
@@ -233,29 +235,36 @@ extern void load_cs_selector();
 
 void VM::Load() {
   // Kernel code segment.
-  AddGDTEntry(SegmentDescriptor().set_required_privileges(kKernelPrivilege).set_type(SegmentDescriptor::kCodeSegment));
+  AddGDTEntry(kKernelCodeSegmentIndex,
+              SegmentDescriptor().set_required_privileges(kKernelPrivilege).set_type(SegmentDescriptor::kCodeSegment));
+
+  // Kernl stack segment.
+  AddGDTEntry(kKernelStackSegmentIndex,
+              SegmentDescriptor().set_required_privileges(kKernelPrivilege).set_type(SegmentDescriptor::kDataSegment));
 
   // User code segment.
-  AddGDTEntry(SegmentDescriptor().set_required_privileges(kUserPrivilege).set_type(SegmentDescriptor::kCodeSegment));
+  AddGDTEntry(kUserCodeSegmentIndex,
+              SegmentDescriptor().set_required_privileges(kUserPrivilege).set_type(SegmentDescriptor::kCodeSegment));
 
-  // Stack segment.
-  AddGDTEntry(SegmentDescriptor().set_required_privileges(kUserPrivilege).set_type(SegmentDescriptor::kDataSegment));
+  // User stack segment.
+  AddGDTEntry(kUserStackSegmentIndex,
+              SegmentDescriptor().set_required_privileges(kUserPrivilege).set_type(SegmentDescriptor::kDataSegment));
 
   // TSS.
   TaskStateSegment tss;
   // FIXME: This is gross that protection needs to know what the layout used by the scheduler is.
-  tss.set_privileged_stack(0, syscall_stack_ + kPageSize - sizeof(CpuState));
+  tss.set_privileged_stack(0, PhysicalToVirtual(syscall_stack_ + kPageSize - sizeof(CpuState)));
   tss.Serialize(tss_);
 
   SegmentDescriptor tss_desc;
   tss_desc.set_type(SegmentDescriptor::kTaskStateSegment);
-  tss_desc.set_base(phys_addr_t(&tss_));
+  tss_desc.set_base(virt_addr_t(&tss_));
   tss_desc.set_size(sizeof(tss_));
-  AddGDTEntry(tss_desc);
+  AddGDTEntry(kTSSIndex, tss_desc);
 
-  env_->LoadGDT(phys_addr_t(&gdt_), num_gdt_entries_ * sizeof(SegmentDescriptor::Storage));
+  env_->LoadGDT(virt_addr_t(&gdt_), kNumGDTEntries * sizeof(SegmentDescriptor::Storage));
 
-  env_->LoadTSS(SegmentSelector(4));
+  env_->LoadTSS(SegmentSelector(kTSSIndex));
 
   g_serial->Printf("Handler table = %p\n", interrupt_handler_table);
 
@@ -264,5 +273,5 @@ void VM::Load() {
     g_serial->Printf("Handler %d = %d/%p\n", i, entry.number, entry.handler);
     AddIDTEntry(entry.number, InterruptDescriptor().set_offset(entry.handler));
   }
-  env_->LoadIDT(phys_addr_t(&idt_), kNumIDTEntries * sizeof(InterruptDescriptor::Storage));
+  env_->LoadIDT(virt_addr_t(&idt_), kNumIDTEntries * sizeof(InterruptDescriptor::Storage));
 }

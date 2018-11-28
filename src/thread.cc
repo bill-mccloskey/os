@@ -12,18 +12,25 @@
 
 Scheduler* g_scheduler;
 
-Thread::Thread(virt_addr_t start_func, int priority)
+Thread::Thread(virt_addr_t start_func,
+               virt_addr_t stack_ptr,
+               phys_addr_t page_tables,
+               int priority,
+               bool kernel_thread)
   : state_{},
     start_func_(start_func),
-    priority_(priority) {
-  stack_ = g_frame_allocator->AllocateFrame();
+    page_tables_(page_tables),
+    priority_(priority),
+    kernel_thread_(kernel_thread) {
+  assert_lt(priority, Scheduler::kNumQueues);
 
-  // FIXME: Do a better job getting the segment selectors from protection.h.
+  int request_priv = kernel_thread_ ? kKernelPrivilege : kUserPrivilege;
+
   state_.rip = start_func;
-  state_.cs = 0x13;
+  state_.cs = SegmentSelector(kernel_thread_ ? kKernelCodeSegmentIndex : kUserCodeSegmentIndex, request_priv).Serialize();
   state_.rflags = (1 << 9); // Enable interrupts.
-  state_.rsp = stack_ + kPageSize;
-  state_.ss = 0x1b;
+  state_.rsp = stack_ptr;
+  state_.ss = SegmentSelector(kernel_thread_ ? kKernelStackSegmentIndex : kUserStackSegmentIndex, request_priv).Serialize();
 }
 
 void Thread::Start() {
@@ -74,12 +81,19 @@ Thread* Scheduler::Dequeue() {
   return nullptr;
 }
 
-void Scheduler::Reschedule() {
+extern "C" {
+void switch_address_space(phys_addr_t tables);
+}
+
+void Scheduler::Reschedule(bool requeue) {
   if (running_thread_) {
     cpu_state_->previous_thread = &running_thread_->state_;
 
-    running_thread_->status_ = Thread::kRunnable;
-    Enqueue(running_thread_);
+    if (requeue) {
+      running_thread_->status_ = Thread::kRunnable;
+      Enqueue(running_thread_);
+    }
+
     running_thread_ = nullptr;
   } else {
     cpu_state_->previous_thread = nullptr;
@@ -88,10 +102,24 @@ void Scheduler::Reschedule() {
   Thread* thread = Dequeue();
   assert(thread);
 
+  g_serial->Printf("Scheduling thread %p\n", thread->state_.rip);
+
   running_thread_ = thread;
   thread->status_ = Thread::kRunning;
 
   cpu_state_->current_thread = &thread->state_;
+
+  if (thread->page_tables_) {
+    switch_address_space(thread->page_tables_);
+  }
+}
+
+void Scheduler::ExitThread() {
+  assert(running_thread_);
+
+  Reschedule(/*requeue=*/ false);
+
+  // FIXME: Don't leak the thread!
 }
 
 extern "C" {
