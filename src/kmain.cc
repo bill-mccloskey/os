@@ -1,13 +1,16 @@
+#include <new>
+
+#include "allocator.h"
 #include "elf.h"
 #include "frame_allocator.h"
 #include "framebuffer.h"
 #include "interrupts.h"
 #include "io.h"
 #include "lazy_global.h"
+#include "linked_list.h"
 #include "multiboot.h"
 #include "page_tables.h"
 #include "page_translation.h"
-#include "placement_new.h"
 #include "protection.h"
 #include "serial.h"
 #include "string.h"
@@ -204,6 +207,18 @@ void kmain(const char* multiboot_info) {
   idle_task.Start();
 
   scheduler->Start();
+
+  // TODO:
+  // - Create a very simple memory allocator for Threads and AddressSpaces.
+  // - Create an AddressSpace class. Perhaps it should be reference counted by Threads? It owns a PageTableManager.
+  // - Have a way to destroy Threads, AddressSpaces, and PageManagers at the right times.
+  // - Factor out loading of programs into a separate .cc file.
+  // - Support large pages in page_tables.cc so the kernel can use one 1GB page instead of many 4K pages.
+  // - Make it easier to add new system calls.
+  // - Add system calls for IPC, waiting for interrupts.
+  // - Try to write drivers for keyboard, PS2 mouse, timer(?).
+  // - Preemptive multitasking with timer interrupt.
+  // - System calls to create threads and address spaces, map memory, etc.
 
   // This code exits qemu.
   //outb(0xf4, 0);

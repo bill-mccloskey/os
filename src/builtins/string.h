@@ -1,7 +1,7 @@
 #ifndef string_h
 #define string_h
 
-#include "types.h"
+using size_t = unsigned long;
 
 extern "C" {
 

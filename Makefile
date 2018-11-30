@@ -1,5 +1,5 @@
 KERNEL_OBJECTS = \
-	assert.o \
+	assertions.o \
 	elf.o \
 	framebuffer.o \
 	frame_allocator.o \
@@ -14,7 +14,7 @@ KERNEL_OBJECTS = \
 	page_tables.o \
 	protection.o \
 	serial.o \
-	string.o \
+	builtins/string.o \
 	syscall.o \
 	thread.o
 
@@ -25,10 +25,13 @@ CC = g++
 CFLAGS = -nostdlib -nostdinc -fno-builtin -fno-stack-protector -mno-red-zone -ffreestanding -mcmodel=large \
          -mno-mmx -mno-sse -mno-sse2 -nostartfiles -nodefaultlibs -fno-rtti \
          -fomit-frame-pointer -fno-exceptions -fno-asynchronous-unwind-tables -fno-unwind-tables \
-         -Wall -Wextra -Werror -Wno-unused-parameter -I/usr/lib/gcc/x86_64-linux-gnu/5/include
+         -Wall -Wextra -Werror -Wno-unused-parameter -isystem /usr/lib/gcc/x86_64-linux-gnu/5/include \
+         -isystem src/builtins
 LDFLAGS = -n -T link.ld
 AS = nasm
 ASFLAGS = -f elf64
+
+GTEST = googletest/googletest
 
 all: build/kernel.elf build/program.elf
 
@@ -56,11 +59,20 @@ run: build/os.iso
 
 build/%.o: src/%.cc
 	@mkdir -p build
+	@mkdir -p build/builtins
 	$(CC) $(CFLAGS)  -c $< -o $@
 
 build/%.o: src/%.s
 	@mkdir -p build
 	$(AS) $(ASFLAGS) $< -o $@
+
+build/libgtest.a: $(GTEST)/src/gtest-all.cc
+	g++ -std=c++11 -isystem $(GTEST)/include -I$(GTEST) -pthread -c $(GTEST)/src/gtest-all.cc -o build/gtest-all.o
+	ar -rv build/libgtest.a build/gtest-all.o
+
+build/tests/%: src/tests/%.cc build/libgtest.a
+	@mkdir -p build/tests
+	g++ -DTESTING -std=c++11 -o $@ -Isrc -I$(GTEST)/include $< -pthread build/libgtest.a
 
 clean:
 	rm -rf build

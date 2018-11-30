@@ -1,8 +1,8 @@
 #ifndef lazy_global_h
 #define lazy_global_h
 
-#include "assert.h"
-#include "placement_new.h"
+#include "assertions.h"
+#include <new>
 
 template<class T>
 class LazyGlobal {

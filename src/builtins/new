@@ -1,7 +1,7 @@
 #ifndef placement_new_h
 #define placement_new_h
 
-#include "types.h"
+#include <string.h>
 
 inline void* operator new(size_t sz, void* here) {
   return here;

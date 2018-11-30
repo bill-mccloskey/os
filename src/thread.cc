@@ -1,6 +1,6 @@
 #include "thread.h"
 
-#include "assert.h"
+#include "assertions.h"
 #include "frame_allocator.h"
 #include "page_translation.h"
 #include "protection.h"

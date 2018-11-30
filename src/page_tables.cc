@@ -1,6 +1,6 @@
 #include "page_tables.h"
 
-#include "assert.h"
+#include "assertions.h"
 #include "frame_allocator.h"
 #include "page_translation.h"
 #include "serial.h"

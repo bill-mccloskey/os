@@ -1,7 +1,6 @@
 #include "interrupts.h"
 
-#include "assert.h"
-
+#include "assertions.h"
 #include "io.h"
 #include "serial.h"
 #include "thread.h"

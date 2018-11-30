@@ -1,4 +1,4 @@
-#include "assert.h"
+#include "assertions.h"
 #include "serial.h"
 
 void AssertionFailure(const char* filename, int line, const char* msg1, const char* msg2, const char* msg3, const char* msg4) {

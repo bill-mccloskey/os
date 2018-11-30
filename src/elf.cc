@@ -1,8 +1,9 @@
 #include "elf.h"
 
-#include "assert.h"
-#include "string.h"
-#include "types.h"
+#include <string.h>
+#include <stdint.h>
+
+#include "assertions.h"
 
 typedef uint64_t Elf64_Addr;
 typedef uint16_t Elf64_Half;
