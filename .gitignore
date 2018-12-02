@@ -1,4 +1,4 @@
-*.o
-kernel.elf
-os.iso
+obj
 *~
+com1.out
+bochslog.txt
