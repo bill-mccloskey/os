@@ -7,7 +7,6 @@
 #include "interrupts.h"
 #include "io.h"
 #include "lazy_global.h"
-#include "linked_list.h"
 #include "multiboot.h"
 #include "page_tables.h"
 #include "page_translation.h"
@@ -209,7 +208,6 @@ void kmain(const char* multiboot_info) {
   scheduler->Start();
 
   // TODO:
-  // - Create a very simple memory allocator for Threads and AddressSpaces.
   // - Create an AddressSpace class. Perhaps it should be reference counted by Threads? It owns a PageTableManager.
   // - Have a way to destroy Threads, AddressSpaces, and PageManagers at the right times.
   // - Factor out loading of programs into a separate .cc file.

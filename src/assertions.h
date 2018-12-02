@@ -12,6 +12,8 @@
 #define assert_le(v1, v2) assert((v1) <= (v2))
 #define assert_ge(v1, v2) assert((v1) >= (v2))
 
+#define panic(msg) assert((msg) != nullptr)
+
 #else  // #ifdef TESTING
 
 void AssertionFailure(const char* filename, int line, const char* msg1, const char* msg2, const char* msg3, const char* msg4);

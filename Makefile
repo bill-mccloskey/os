@@ -21,6 +21,9 @@ KERNEL_OBJECTS = \
 PROGRAM_OBJECTS = \
 	program.o
 
+build/tests/linked_list_test: TEST_SRCS =
+build/tests/allocator_test: TEST_SRCS = frame_allocator.cc
+
 CC = g++
 CFLAGS = -nostdlib -nostdinc -fno-builtin -fno-stack-protector -mno-red-zone -ffreestanding -mcmodel=large \
          -mno-mmx -mno-sse -mno-sse2 -nostartfiles -nodefaultlibs -fno-rtti \
@@ -70,9 +73,9 @@ build/libgtest.a: $(GTEST)/src/gtest-all.cc
 	g++ -std=c++11 -isystem $(GTEST)/include -I$(GTEST) -pthread -c $(GTEST)/src/gtest-all.cc -o build/gtest-all.o
 	ar -rv build/libgtest.a build/gtest-all.o
 
-build/tests/%: src/tests/%.cc build/libgtest.a
+build/tests/%: src/tests/%.cc $(addprefix src/,$(TEST_SRCS)) build/libgtest.a
 	@mkdir -p build/tests
-	g++ -DTESTING -std=c++11 -o $@ -Isrc -I$(GTEST)/include $< -pthread build/libgtest.a
+	g++ -g -DTESTING -std=c++11 -o $@ -Isrc -I$(GTEST)/include $< $(addprefix src/,$(TEST_SRCS)) -pthread build/libgtest.a
 
 clean:
 	rm -rf build

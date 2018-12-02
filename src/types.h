@@ -9,5 +9,11 @@ using virt_addr_t = uintptr_t;
 
 static const int kPageSize = 4096;
 
+#ifdef TESTING
+#define FINAL_IF_RELEASE /* empty */
+#else
+#define FINAL_IF_RELEASE final
+#endif
+
 #endif  // types_h
 

@@ -12,11 +12,16 @@ struct TestObject {
 TEST(LinkedListTest, Basic) {
   LINKED_LIST(TestObject, entry1) list;
 
+  EXPECT_TRUE(list.IsEmpty());
+
   TestObject obj1(1), obj2(2), obj3(3);
 
   list.PushBack(obj1.entry1);
+  EXPECT_FALSE(list.IsEmpty());
   list.PushBack(obj2.entry1);
+  EXPECT_FALSE(list.IsEmpty());
   list.PushBack(obj3.entry1);
+  EXPECT_FALSE(list.IsEmpty());
 
   int index = 1;
   for (TestObject& obj : list) {
@@ -25,6 +30,7 @@ TEST(LinkedListTest, Basic) {
   }
 
   obj2.entry1.Remove();
+  EXPECT_FALSE(list.IsEmpty());
 
   decltype(list)::Iter it = list.begin();
   EXPECT_EQ(it->value, 1);

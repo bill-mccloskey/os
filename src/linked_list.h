@@ -36,6 +36,11 @@ public:
     next_ = &entry;
   }
 
+  bool InList() const {
+    assert((next_ == nullptr) == (prev_ == nullptr));
+    return next_ != nullptr;
+  }
+
 private:
   template<typename T, size_t>
   friend class LinkedList;
@@ -150,6 +155,10 @@ public:
     assert_ne(entry, &sentinel_);
     entry->Remove();
     return ElementFrom(entry);
+  }
+
+  bool IsEmpty() const {
+    return sentinel_.next_ == &sentinel_;
   }
 
 private:
