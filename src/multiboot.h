@@ -25,7 +25,7 @@ class MultibootReader {
 public:
   MultibootReader(const char* header) : header_(header) {}
 
-  void Read(MultibootVisitor* visitor);
+  void Read(MultibootVisitor* visitor) const;
 
 private:
   const char* header_;

@@ -35,7 +35,7 @@ struct MultibootHeader {
   uint32_t reserved;
 } __attribute__((packed));
 
-void MultibootReader::Read(MultibootVisitor* visitor) {
+void MultibootReader::Read(MultibootVisitor* visitor) const {
   const MultibootHeader* header = reinterpret_cast<const MultibootHeader*>(header_);
 
   const char* p = reinterpret_cast<const char*>(header + 1);
