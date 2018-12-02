@@ -49,7 +49,7 @@ private:
 
 class ElfLoaderVisitor : public ElfVisitor {
 public:
-  ElfLoaderVisitor(PageTableManager* tables) : tables_(tables) {}
+  ElfLoaderVisitor(const RefPtr<AddressSpace>& as) : address_space_(as) {}
 
   void LoadSegment(int flags, const char* data, size_t size, virt_addr_t load_addr, size_t load_size) override {
     g_serial->Printf("  Would load segment (flags=%d) at %p, size=%d/%d\n", flags, load_addr, (int)size, (int)load_size);
@@ -67,7 +67,7 @@ public:
     virt_addr_t virt_start = load_addr;
     virt_addr_t virt_end = virt_start + size;
     virt_end = (virt_end + kPageSize - 1) & ~(kPageSize - 1);
-    tables_->Map(phys_start, phys_end, virt_start, virt_end, attrs);
+    address_space_->Map(phys_start, phys_end, virt_start, virt_end, attrs);
 
     if (load_size == size) return;
 
@@ -83,47 +83,32 @@ public:
       phys_end = phys_start + kPageSize;
       memset(reinterpret_cast<void*>(PhysicalToVirtual(phys_start)), 0, kPageSize);
 
-      tables_->Map(phys_start, phys_end, virt_start, virt_end, attrs);
+      address_space_->Map(phys_start, phys_end, virt_start, virt_end, attrs);
     }
   }
 
 private:
-  PageTableManager* tables_;
+  RefPtr<AddressSpace> address_space_;
 };
 
 class MultibootLoaderVisitor : public MultibootVisitor {
 public:
-  MultibootLoaderVisitor(PageTableManager* tables) : tables_(tables) {}
+  MultibootLoaderVisitor() {}
 
   void Module(const char* label, uint32_t module_start, uint32_t module_end) override {
+    RefPtr<AddressSpace> as = new AddressSpace();
+
     virt_addr_t start_addr = PhysicalToVirtual(module_start);
     size_t size = module_end - module_start;
     const char* data = reinterpret_cast<const char*>(start_addr);
     ElfReader reader(data, size);
 
-    ElfLoaderVisitor loader_visitor(tables_);
+    ElfLoaderVisitor loader_visitor(as);
     reader.Read(&loader_visitor);
 
-    // Map in a stack.
-    const virt_addr_t kStackBase = virt_addr_t(0x7ffffffff000);
-    phys_addr_t program_stack = g_frame_allocator->AllocateFrame();
-    tables_->Map(program_stack, program_stack + kPageSize,
-                 kStackBase, kStackBase + kPageSize,
-                 PageAttributes());
-
-    // Map kernel memory.
-    const size_t kMaxRAMSize = 1 << 21;
-    tables_->Map(0, kMaxRAMSize, kKernelVirtualStart, kKernelVirtualStart + kMaxRAMSize, PageAttributes());
-
-    phys_addr_t thread_phys = g_frame_allocator->AllocateFrame();
-    void* thread_mem = reinterpret_cast<void*>(PhysicalToVirtual(thread_phys));
-    Thread* thread = new (thread_mem) Thread(reader.entry_point(), kStackBase + kPageSize,
-                                             tables_->table_root(), 0);
+    Thread* thread = as->CreateThread(reader.entry_point(), 0);
     thread->Start();
   }
-
-private:
-  PageTableManager* tables_;
 };
 
 void IdleTask() {
@@ -138,6 +123,9 @@ static LazyGlobal<SerialPort> serial_port;
 static LazyGlobal<FrameAllocator> frame_allocator;
 static LazyGlobal<VM> vm;
 static LazyGlobal<Scheduler> scheduler;
+
+static LazyGlobal<Allocator<AddressSpace>> address_space_allocator;
+static LazyGlobal<Allocator<Thread>> thread_allocator;
 
 extern "C" {
 
@@ -168,6 +156,11 @@ void kmain(const char* multiboot_info) {
   frame_allocator.emplace(phys_addr_t(kernel_physical_start), phys_addr_t(kernel_physical_end));
   g_frame_allocator = &frame_allocator.value();
 
+  address_space_allocator.emplace();
+  g_address_space_allocator = &address_space_allocator.value();
+  thread_allocator.emplace();
+  g_thread_allocator = &thread_allocator.value();
+
   VMEnv env;
   vm.emplace(&env);
   vm->Load();
@@ -188,28 +181,16 @@ void kmain(const char* multiboot_info) {
   MultibootMemoryMapVisitor mem_visitor(&frame_allocator.value());
   multiboot_reader.Read(&mem_visitor);
 
-  PageTableManager tables;
-  MultibootLoaderVisitor load_visitor(&tables);
+  MultibootLoaderVisitor load_visitor;
   multiboot_reader.Read(&load_visitor);
 
-  PageTableManager idle_tables;
-  const size_t kMaxRAMSize = 1 << 21;
-  idle_tables.Map(0, kMaxRAMSize, kKernelVirtualStart, kKernelVirtualStart + kMaxRAMSize, PageAttributes());
-
-  const virt_addr_t kStackBase = virt_addr_t(0x7ffffffff000);
-  phys_addr_t program_stack = g_frame_allocator->AllocateFrame();
-  idle_tables.Map(program_stack, program_stack + kPageSize,
-                  kStackBase, kStackBase + kPageSize,
-                  PageAttributes());
-
-  Thread idle_task(virt_addr_t(&IdleTask), kStackBase + kPageSize - 8, idle_tables.table_root(), 2, true);
-  idle_task.Start();
+  RefPtr<AddressSpace> idle_as = new AddressSpace(true);
+  Thread* idle_task = idle_as->CreateThread(virt_addr_t(&IdleTask), 2);
+  idle_task->Start();
 
   scheduler->Start();
 
   // TODO:
-  // - Create an AddressSpace class. Perhaps it should be reference counted by Threads? It owns a PageTableManager.
-  // - Have a way to destroy Threads, AddressSpaces, and PageManagers at the right times.
   // - Factor out loading of programs into a separate .cc file.
   // - Support large pages in page_tables.cc so the kernel can use one 1GB page instead of many 4K pages.
   // - Make it easier to add new system calls.

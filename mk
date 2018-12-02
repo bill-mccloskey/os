@@ -4,6 +4,7 @@ import os
 import sys
 
 kernel_files = [
+    'address_space.cc',
     'assertions.cc',
     'elf.cc',
     'framebuffer.cc',
@@ -43,7 +44,9 @@ def run(cmd, d):
     d.update(globals())
     cmd = cmd.format(**d)
     print cmd
-    os.system(cmd)
+    code = os.system(cmd)
+    if code:
+        sys.exit(code)
 
 def build_kernel_cc(inp, out):
     run('g++ {kernel_cflags} -c {inp} -o {out}', locals())

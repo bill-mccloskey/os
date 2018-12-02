@@ -14,12 +14,12 @@ Scheduler* g_scheduler;
 
 Thread::Thread(virt_addr_t start_func,
                virt_addr_t stack_ptr,
-               phys_addr_t page_tables,
+               const RefPtr<AddressSpace>& address_space,
                int priority,
                bool kernel_thread)
   : state_{},
     start_func_(start_func),
-    page_tables_(page_tables),
+    address_space_(address_space),
     priority_(priority),
     kernel_thread_(kernel_thread) {
   assert_lt(priority, Scheduler::kNumQueues);
@@ -81,6 +81,9 @@ Thread* Scheduler::Dequeue() {
   return nullptr;
 }
 
+Allocator<Thread>* g_thread_allocator;
+DEFINE_ALLOCATION_METHODS(Thread, g_thread_allocator);
+
 extern "C" {
 void switch_address_space(phys_addr_t tables);
 }
@@ -109,17 +112,16 @@ void Scheduler::Reschedule(bool requeue) {
 
   cpu_state_->current_thread = &thread->state_;
 
-  if (thread->page_tables_) {
-    switch_address_space(thread->page_tables_);
-  }
+  switch_address_space(thread->address_space_->table_root());
 }
 
 void Scheduler::ExitThread() {
-  assert(running_thread_);
+  Thread* thread = running_thread_;
+  assert(thread);
 
   Reschedule(/*requeue=*/ false);
 
-  // FIXME: Don't leak the thread!
+  delete thread;
 }
 
 extern "C" {

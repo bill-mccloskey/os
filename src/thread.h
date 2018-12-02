@@ -1,6 +1,8 @@
 #ifndef thread_h
 #define thread_h
 
+#include "address_space.h"
+#include "allocator.h"
 #include "types.h"
 
 class Scheduler;
@@ -34,13 +36,15 @@ class Thread {
 public:
   Thread(virt_addr_t start_func,
          virt_addr_t stack_ptr,
-         phys_addr_t page_tables,
+         const RefPtr<AddressSpace>& address_space,
          int priority,
          bool kernel_thread = false);
 
   void Start();
 
   int priority() const { return priority_; }
+
+  DECLARE_ALLOCATION_METHODS();
 
 private:
   friend class Scheduler;
@@ -53,13 +57,15 @@ private:
 
   ThreadState state_;
   virt_addr_t start_func_;
-  phys_addr_t page_tables_;
+  RefPtr<AddressSpace> address_space_;
   int priority_;
   bool kernel_thread_;
   Status status_ = kBlocked;
   Thread* next_thread_ = nullptr;
   Thread* prev_thread_ = nullptr;
 };
+
+extern Allocator<Thread>* g_thread_allocator;
 
 class Scheduler {
 public:

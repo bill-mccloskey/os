@@ -6,6 +6,8 @@
 #include "page_translation.h"
 #include "types.h"
 
+#include <new>
+
 template<typename T>
 class Allocator {
 public:
@@ -23,7 +25,7 @@ public:
   }
 
   void Deallocate(T* ptr) {
-    FreeObject* free = new (ptr) FreeObject;
+    FreeObject* free = new (static_cast<void*>(ptr)) FreeObject;
     free_list_.PushFront(free->entry);
 
     virt_addr_t addr = reinterpret_cast<virt_addr_t>(ptr);
@@ -75,5 +77,13 @@ private:
   using FreeList = LINKED_LIST(FreeObject, entry);
   FreeList free_list_;
 };
+
+#define DECLARE_ALLOCATION_METHODS() \
+  void* operator new(size_t count); \
+  void operator delete(void* ptr, size_t count);
+
+#define DEFINE_ALLOCATION_METHODS(T, alloc) \
+  void* T::operator new(size_t count) { return (alloc)->Allocate(); } \
+  void T::operator delete(void* ptr, size_t count) { return (alloc)->Deallocate(static_cast<T*>(ptr)); }
 
 #endif
