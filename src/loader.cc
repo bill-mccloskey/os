@@ -20,6 +20,9 @@ public:
 
     PageAttributes attrs;
 
+    attrs.set_writable(flags & kFlagWrite);
+    attrs.set_no_execute(!(flags & kFlagExecute));
+
     phys_addr_t phys_start = VirtualToPhysical(reinterpret_cast<virt_addr_t>(data));
     assert_eq(phys_start & (kPageSize - 1), 0);
 

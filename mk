@@ -26,6 +26,17 @@ kernel_files = [
     'thread.cc',
 ]
 
+test_files = [
+    'allocator_test.cc',
+    'page_tables_test.cc',
+    'linked_list_test.cc',
+]
+
+extra_test_files = {
+    'allocator_test.cc': 'src/frame_allocator.cc',
+    'page_tables_test.cc': 'src/frame_allocator.cc src/page_tables.cc'
+}
+
 kernel_cflags = (
     '-nostdlib -nostdinc -fno-builtin -fno-stack-protector -mno-red-zone -ffreestanding -mcmodel=large ' +
     '-mno-mmx -mno-sse -mno-sse2 -nostartfiles -nodefaultlibs -fno-rtti ' +
@@ -84,11 +95,24 @@ def build_iso():
 def build():
     os.system('mkdir -p obj')
     os.system('mkdir -p obj/builtins')
-    os.system('mkdir -p obj/tests')
 
     build_kernel()
     build_program()
     build_iso()
+
+def build_tests():
+    os.system('mkdir -p obj')
+    os.system('mkdir -p obj/tests')
+
+    gtest = 'googletest/googletest'
+    run('g++ -std=c++11 -isystem {gtest}/include -I{gtest} -pthread -c {gtest}/src/gtest-all.cc -o obj/gtest-all.o', locals())
+    run('ar -rv obj/libgtest.a obj/gtest-all.o', locals())
+
+    for f in test_files:
+        objfile = 'obj/tests/' + f.replace('.cc', '')
+        extra = extra_test_files.get(f, '')
+        run('g++ -g -DTESTING -std=c++11 -o {objfile} -Isrc -I{gtest}/include src/tests/{f} {extra} -pthread obj/libgtest.a',
+            locals())
 
 def clean():
     os.system('rm -rf obj')
@@ -104,6 +128,8 @@ if sys.argv[1] == 'clean':
     clean()
 elif sys.argv[1] == 'build':
     build()
+elif sys.argv[1] == 'tests':
+    build_tests()
 elif sys.argv[1] == 'bochs':
     build()
     run_bochs()

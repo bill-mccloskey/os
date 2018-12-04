@@ -153,9 +153,11 @@ enable_paging:
   mov cr4, eax
 
   ; set the long mode bit in the EFER MSR (model specific register)
+  ; also enable the NX page flag
   mov ecx, 0xC0000080
   rdmsr
-  or eax, 1 << 8
+  or eax, 1 << 8                ; long mode enabled flag
+  or eax, 1 << 11               ; NX enabled flag
   wrmsr
 
   ; enable paging in the cr0 register

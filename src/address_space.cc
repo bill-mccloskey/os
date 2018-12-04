@@ -6,7 +6,7 @@
 static const virt_addr_t kStackBase = virt_addr_t(0x7ffffffff000);
 
 AddressSpace::AddressSpace(bool kernel_space) : kernel_space_(kernel_space) {
-  const size_t kMaxRAMSize = 1 << 21;
+  const size_t kMaxRAMSize = 64 * (uint64_t(1) << 30);
   page_tables_.Map(0, kMaxRAMSize, kKernelVirtualStart, kKernelVirtualStart + kMaxRAMSize, PageAttributes());
 }
 
@@ -14,6 +14,7 @@ Thread* AddressSpace::CreateThread(virt_addr_t start_func, int priority) {
   const int kStackPages = 4;
 
   PageAttributes stack_attrs;
+  stack_attrs.set_no_execute(true);
   for (int i = 0; i < kStackPages; i++) {
     phys_addr_t page = g_frame_allocator->AllocateFrame();
     virt_addr_t virt = kStackBase - (i + 1) * kPageSize;

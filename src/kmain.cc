@@ -127,8 +127,6 @@ void kmain(const char* multiboot_info) {
   scheduler->Start();
 
   // TODO:
-  // - Factor out loading of programs into a separate .cc file.
-  // - Support large pages in page_tables.cc so the kernel can use one 1GB page instead of many 4K pages.
   // - Make it easier to add new system calls.
   // - Add system calls for IPC, waiting for interrupts.
   // - Try to write drivers for keyboard, PS2 mouse, timer(?).

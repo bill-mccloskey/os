@@ -16,10 +16,6 @@ static const int ET_EXEC = 2;
 static const int EM_X86_64 = 62;
 static const int PT_LOAD = 1;
 
-static const int PF_X = 1;
-static const int PF_W = 2;
-static const int PF_R = 4;
-
 struct Elf64_Ehdr {
   unsigned char e_ident[EI_NIDENT];
   Elf64_Half e_type;

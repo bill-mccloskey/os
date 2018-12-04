@@ -3,13 +3,6 @@
 
 #include "types.h"
 
-#if 0
-class PageTableManagerEnv {
-public:
-  virtual void Load(phys_addr_t table);
-};
-#endif
-
 class PageAttributes {
 public:
   PageAttributes& set_present(bool present) { present_ = present; return *this; }
