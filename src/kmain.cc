@@ -59,6 +59,7 @@ static LazyGlobal<SerialPort> serial_port;
 static LazyGlobal<FrameAllocator> frame_allocator;
 static LazyGlobal<VM> vm;
 static LazyGlobal<Scheduler> scheduler;
+static LazyGlobal<InterruptController> interrupts;
 
 static LazyGlobal<Allocator<AddressSpace>> address_space_allocator;
 static LazyGlobal<Allocator<Thread>> thread_allocator;
@@ -103,12 +104,12 @@ void kmain(const char* multiboot_info) {
 
   g_serial->Printf("Protection setup worked. Going to user mode.\n");
 
-  InterruptController intr(&io);
-
-  intr.Init();
+  interrupts.emplace(&io);
+  g_interrupts = &interrupts.value();
+  interrupts->Init();
 
   // Disable the timer interrupt.
-  intr.Mask(0, false);
+  interrupts->Mask(0, false);
 
   scheduler.emplace(syscall_stack_top);
   g_scheduler = &scheduler.value();

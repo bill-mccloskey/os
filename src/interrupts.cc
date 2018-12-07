@@ -14,23 +14,11 @@ static const int kSecondaryDataPort = 0xa1;
 
 static const int kEndOfInterruptCommand = 0x20;
 
+InterruptController* g_interrupts;
+
 extern "C" {
 
 void kinterrupt(int64_t interrupt_number, uint64_t error_code) {
-  g_serial->Printf("Interrupt %d received\n", interrupt_number);
-
-  // Timer
-  if (interrupt_number == 32) {
-    outb(kPrimaryCommandPort, kEndOfInterruptCommand);
-  }
-
-  // Keyboard
-  if (interrupt_number == 33) {
-    unsigned char scan_code = inb(0x60);
-    g_serial->Printf("Keyboard scancode = %u\n", scan_code);
-    outb(kPrimaryCommandPort, kEndOfInterruptCommand);
-  }
-
   // GPF
   if (interrupt_number == 13) {
     g_serial->Printf("GPF: error=%u\n", uint32_t(error_code));
@@ -38,6 +26,11 @@ void kinterrupt(int64_t interrupt_number, uint64_t error_code) {
     for (;;) {
       asm("hlt");
     }
+  }
+
+  int irq = g_interrupts->InterruptNumberToIRQ(interrupt_number);
+  if (irq >= 0) {
+    g_interrupts->Interrupt(irq);
   }
 }
 
@@ -75,9 +68,21 @@ void InterruptController::Init() {
   io_->Out(kSecondaryDataPort, mask2);
 }
 
+int InterruptController::InterruptNumberToIRQ(int interrupt_number) {
+  if (interrupt_number >= offset1_ && interrupt_number < offset1_ + kInterruptsPerController) {
+    return interrupt_number - offset1_;
+  }
+
+  if (interrupt_number >= offset2_ && interrupt_number < offset2_ + kInterruptsPerController) {
+    return interrupt_number - offset2_;
+  }
+
+  return -1;
+}
+
 void InterruptController::Acknowledge(int irq)
 {
-  if (irq >= 8) {
+  if (irq >= kInterruptsPerController) {
     io_->Out(kSecondaryCommandPort, kEndOfInterruptCommand);
   }
 
@@ -87,11 +92,11 @@ void InterruptController::Acknowledge(int irq)
 void InterruptController::Mask(int irq, bool allow) {
   uint16_t port;
 
-  if (irq < 8) {
+  if (irq < kInterruptsPerController) {
     port = kPrimaryDataPort;
   } else {
     port = kSecondaryDataPort;
-    irq -= 8;
+    irq -= kInterruptsPerController;
   }
   uint8_t mask = io_->In(port);
   if (allow) {
@@ -121,4 +126,42 @@ uint16_t InterruptController::GetServicingInterrupts()
 {
   const int kReadISR = 0xb;
   return GetRegister(kReadISR);
+}
+
+void InterruptController::RegisterForInterrupt(int irq, Thread* thread) {
+  assert_eq(registrations_[irq], nullptr);
+  registrations_[irq] = thread;
+}
+
+void InterruptController::UnregisterForInterrupts(Thread* thread) {
+  for (int i = 0; i < kMaxIRQs; i++) {
+    if (registrations_[i] == thread) {
+      registrations_[i] = nullptr;
+    }
+  }
+}
+
+void InterruptController::Interrupt(int irq) {
+  g_serial->Printf("IRQ %d received\n", irq);
+
+  // Timer
+  if (irq == 0) {
+    Acknowledge(irq);
+    outb(kPrimaryCommandPort, kEndOfInterruptCommand);
+  }
+
+  assert_lt(irq, kMaxIRQs);
+  if (registrations_[irq]) {
+    Thread* thread = registrations_[irq];
+    thread->NotifyFromKernel();
+  }
+
+#if 0
+  // Keyboard
+  if (irq == 1) {
+    unsigned char scan_code = inb(0x60);
+    g_serial->Printf("Keyboard scancode = %u\n", scan_code);
+    outb(kPrimaryCommandPort, kEndOfInterruptCommand);
+  }
+#endif
 }

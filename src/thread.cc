@@ -2,21 +2,20 @@
 
 #include "assertions.h"
 #include "frame_allocator.h"
+#include "interrupts.h"
 #include "page_translation.h"
 #include "protection.h"
 #include "serial.h"
 
-// FIXME: This code is turning into spaghetti. Too many mutual dependencies between
-// thread.cc, protection.cc, and interrupts.cc. Is there a better way to split it?
-// Or should it all be in one file?
-
 Scheduler* g_scheduler;
+int g_thread_id = 32;
 
 Thread::Thread(virt_addr_t start_func,
                virt_addr_t stack_ptr,
                const RefPtr<AddressSpace>& address_space,
                int priority)
-  : state_{},
+  : id_(g_thread_id++),
+    state_{},
     start_func_(start_func),
     address_space_(address_space),
     priority_(priority) {
@@ -29,6 +28,14 @@ Thread::Thread(virt_addr_t start_func,
   state_.ss = SegmentSelector(kUserStackSegmentIndex, kUserPrivilege).Serialize();
 }
 
+Thread::~Thread() {
+  assert(!thread_links.InList());
+  g_scheduler->RemoveThread(this);
+
+  // FIXME: Would be good to have a general notification mechanism for when a thread exits.
+  g_interrupts->UnregisterForInterrupts(this);
+}
+
 void Thread::SetKernelThread() {
   state_.cs = SegmentSelector(kKernelCodeSegmentIndex, kKernelPrivilege).Serialize();
   state_.ss = SegmentSelector(kKernelStackSegmentIndex, kKernelPrivilege).Serialize();
@@ -39,12 +46,102 @@ void Thread::AllowIo() {
 }
 
 void Thread::Start() {
-  assert_eq(status_, kBlocked);
+  assert_eq(status_, kStarting);
   status_ = kRunnable;
+  g_scheduler->AddThread(this);
   g_scheduler->Enqueue(this);
 }
 
-Scheduler::Scheduler(virt_addr_t syscall_stack_reservation) {
+void Thread::Send(int dest_tid, int type, int payload) {
+  Thread* dest = g_scheduler->FindThread(dest_tid);
+  // FIXME: Check for null dest.
+  if (dest->status_ == kBlockedReceiving) {
+    g_scheduler->RunThread(dest, true);
+
+    // This must happen *after* RunThread so we're in the AS of the recipient.
+    // Warning: This is writing directly into the userspace. Could get page faults
+    // and maybe other exceptions? Need to handle this!
+    ReceiveInfo& info = dest->receive_info_;
+    *info.sender_tid = id();
+    *info.type = type;
+    *info.payload = payload;
+  } else {
+    send_info_.sender_tid = id();
+    send_info_.type = type;
+    send_info_.payload = payload;
+
+    dest->send_queue_.PushBack(thread_links);
+    status_ = kBlockedSending;
+    g_scheduler->Reschedule(false);
+  }
+}
+
+void Thread::Receive(int* sender_tid, int* type, int* payload) {
+  if (notified_) {
+    notified_ = false;
+    *sender_tid = 0;
+    *type = 0;
+    *payload = 0;
+    return;
+  }
+
+  if (send_queue_.IsEmpty()) {
+    receive_info_.sender_tid = sender_tid;
+    receive_info_.type = type;
+    receive_info_.payload = payload;
+
+    status_ = kBlockedReceiving;
+    g_scheduler->Reschedule(false);
+  } else {
+    Thread* sender = send_queue_.PopFront();
+    assert_eq(sender->status_, kBlockedSending);
+    sender->status_ = kRunnable;
+
+    const SendInfo& info = sender->send_info_;
+    *sender_tid = info.sender_tid;
+    *type = info.type;
+    *payload = info.payload;
+
+    g_scheduler->Enqueue(sender);
+  }
+}
+
+void Thread::Notify(int notify_tid) {
+  Thread* dest = g_scheduler->FindThread(notify_tid);
+  // FIXME: Check for null dest.
+  if (dest->status_ == kBlockedReceiving) {
+    g_scheduler->RunThread(dest, true);
+
+    // This must happen *after* RunThread so we're in the AS of the recipient.
+    // Warning: This is writing directly into the userspace. Could get page faults
+    // and maybe other exceptions? Need to handle this!
+    ReceiveInfo& info = dest->receive_info_;
+    *info.sender_tid = 0;
+    *info.type = 0;
+    *info.payload = 0;
+  } else {
+    dest->notified_ = true;
+  }
+}
+
+void Thread::NotifyFromKernel() {
+  if (status_ == kBlockedReceiving) {
+    g_scheduler->RunThread(this, true);
+
+    // This must happen *after* RunThread so we're in the AS of the recipient.
+    // Warning: This is writing directly into the userspace. Could get page faults
+    // and maybe other exceptions? Need to handle this!
+    ReceiveInfo& info = receive_info_;
+    *info.sender_tid = 0;
+    *info.type = 0;
+    *info.payload = 0;
+  } else {
+    notified_ = true;
+  }
+}
+
+Scheduler::Scheduler(virt_addr_t syscall_stack_reservation)
+  : thread_id_hash_{} {
   assert_eq((syscall_stack_reservation + sizeof(CpuState)) % kPageSize, 0);
   cpu_state_ = reinterpret_cast<CpuState*>(syscall_stack_reservation);
   *cpu_state_ = {};
@@ -52,34 +149,13 @@ Scheduler::Scheduler(virt_addr_t syscall_stack_reservation) {
 
 void Scheduler::Enqueue(Thread* thread) {
   int prio = thread->priority();
-
-  assert_eq(thread->prev_thread_, nullptr);
-  assert_eq(thread->next_thread_, nullptr);
-
-  Thread* head = queue_head_[prio];
-  queue_head_[prio] = thread;
-  thread->next_thread_ = head;
-  if (head) {
-    head->prev_thread_ = thread;
-  } else {
-    queue_tail_[prio] = thread;
-  }
+  runnable_[prio].PushBack(thread->thread_links);
 }
 
 Thread* Scheduler::Dequeue() {
   for (int i = 0; i < kNumQueues; i++) {
-    if (!queue_tail_[i]) continue;
-
-    Thread* result = queue_tail_[i];
-    queue_tail_[i] = result->prev_thread_;
-    if (result->prev_thread_) {
-      result->prev_thread_->next_thread_ = nullptr;
-    } else {
-      queue_head_[i] = nullptr;
-    }
-
-    result->prev_thread_ = nullptr;
-    return result;
+    if (runnable_[i].IsEmpty()) continue;
+    return runnable_[i].PopFront();
   }
 
   return nullptr;
@@ -89,10 +165,11 @@ Allocator<Thread>* g_thread_allocator;
 DEFINE_ALLOCATION_METHODS(Thread, g_thread_allocator);
 
 extern "C" {
-void switch_address_space(phys_addr_t tables);
+void SwitchAddressSpace(phys_addr_t tables);
+void SchedulerStart(ThreadState* state);
 }
 
-void Scheduler::Reschedule(bool requeue) {
+void Scheduler::RunThread(Thread* thread, bool requeue) {
   if (running_thread_) {
     cpu_state_->previous_thread = &running_thread_->state_;
 
@@ -106,17 +183,20 @@ void Scheduler::Reschedule(bool requeue) {
     cpu_state_->previous_thread = nullptr;
   }
 
-  Thread* thread = Dequeue();
-  assert(thread);
-
   g_serial->Printf("Scheduling thread %p\n", thread->state_.rip);
 
   running_thread_ = thread;
   thread->status_ = Thread::kRunning;
 
   cpu_state_->current_thread = &thread->state_;
+  SwitchAddressSpace(thread->address_space_->table_root());
+}
 
-  switch_address_space(thread->address_space_->table_root());
+void Scheduler::Reschedule(bool requeue) {
+  Thread* thread = Dequeue();
+  assert(thread);
+
+  RunThread(thread, requeue);
 }
 
 void Scheduler::ExitThread() {
@@ -128,16 +208,45 @@ void Scheduler::ExitThread() {
   delete thread;
 }
 
-extern "C" {
-  void scheduler_start(ThreadState* state);
-}
-
 void Scheduler::Start() {
   Reschedule();
-  scheduler_start(&running_thread_->state_);
+  SchedulerStart(&running_thread_->state_);
 }
 
 void Scheduler::DumpState() {
   Thread* thread = running_thread_;
   g_serial->Printf("rip = %p\n", thread->state_.rip);
+}
+
+void Scheduler::AddThread(Thread* thread) {
+  assert_ge(thread->id(), 0);
+  int h = thread->id() % kThreadIdHashSize;
+  thread->next_by_id_ = thread_id_hash_[h];
+  thread_id_hash_[h] = thread;
+}
+
+void Scheduler::RemoveThread(Thread* thread) {
+  assert_ge(thread->id(), 0);
+  int h = thread->id() % kThreadIdHashSize;
+  for (Thread** t = &thread_id_hash_[h]; *t; t = &(*t)->next_by_id_) {
+    if (*t == thread) {
+      *t = thread->next_by_id_;
+      return;
+    }
+  }
+
+  panic("Thread not found in hash table");
+}
+
+Thread* Scheduler::FindThread(int id) {
+  assert_ge(id, 0);
+  int h = id % kThreadIdHashSize;
+  for (Thread* t = thread_id_hash_[h]; t; t = t->next_by_id_) {
+    if (t->id() == id) {
+      return t;
+    }
+  }
+
+  panic("Thread ID not found in hash table");
+  return nullptr;
 }

@@ -66,19 +66,19 @@ static bool StringIs(const char* start, const char* end, const char* cmp) {
   return true;
 }
 
-static phys_addr_t ParseAddress(const char* start, const char* end) {
-  phys_addr_t addr = 0;
+static uint64_t ParseNum(int base, const char* start, const char* end) {
+  uint64_t v = 0;
   while (start < end) {
-    addr <<= 4;
+    v *= base;
 
-    if (*start >= '0' && *start <= '9') addr |= *start - '0';
-    else if (*start >= 'a' && *start <= 'f') addr |= *start - 'a' + 10;
+    if (*start >= '0' && *start <= '9') v |= *start - '0';
+    else if (*start >= 'a' && *start <= 'f') v |= *start - 'a' + 10;
     else panic("Invalid address for map argument");
 
     start++;
   }
 
-  return addr;
+  return v;
 }
 
 static void ParseArguments(const char* args, const RefPtr<AddressSpace>& as, Thread* thread) {
@@ -98,8 +98,8 @@ static void ParseArguments(const char* args, const RefPtr<AddressSpace>& as, Thr
       while (comma < end_value && *comma != ',') comma++;
       if (comma == end_value) panic("Invalid memory range for map argument");
 
-      phys_addr_t start = ParseAddress(value, comma);
-      phys_addr_t end = ParseAddress(comma + 1, end_value);
+      phys_addr_t start = ParseNum(16, value, comma);
+      phys_addr_t end = ParseNum(16, comma + 1, end_value);
       g_serial->Printf("Mapping to userspace: %p to %p\n", start, end);
       as->Map(start, end, start, end, PageAttributes());
     } else if (StringIs(key, end_key, "allow_io")) {
@@ -110,6 +110,9 @@ static void ParseArguments(const char* args, const RefPtr<AddressSpace>& as, Thr
       } else {
         panic("Unrecognized allow_io argument");
       }
+    } else if (StringIs(key, end_key, "tid")) {
+      int tid = ParseNum(10, value, end_value);
+      thread->set_id(tid);
     } else {
       panic("Unrecognized command line argument");
     }

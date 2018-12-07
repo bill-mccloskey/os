@@ -4,13 +4,18 @@
 section .text
 
 %macro gen_syscall 2
-global sys_%1
-sys_%1:
+global Sys%1
+Sys%1:
   mov rax, %2
   int 0x80
   ret
 %endmacro
 
-gen_syscall write_byte, 1
-gen_syscall reschedule, 2
-gen_syscall exit_thread, 3
+gen_syscall WriteByte, 1
+gen_syscall Reschedule, 2
+gen_syscall ExitThread, 3
+gen_syscall Send, 4
+gen_syscall Receive, 5
+gen_syscall Notify, 6
+gen_syscall RequestInterrupt, 7
+gen_syscall AckInterrupt, 8

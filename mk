@@ -80,15 +80,22 @@ def build_kernel():
     obj_files = ' '.join(obj_files)
     run('ld {kernel_ldflags} {obj_files} -o obj/kernel.elf', locals())
 
-def build_program():
+def build_terminal_driver():
     run('nasm {asflags} src/syscall.s -o obj/syscall.o', locals())
-    run('g++ {user_cflags} obj/syscall.o -Isrc src/framebuffer.cc src/io.cc src/program/program.cc -o obj/program.elf', locals())
+    run('g++ {user_cflags} obj/syscall.o -Isrc src/framebuffer.cc src/io.cc src/drivers/terminal/terminal.cc -o obj/terminal.elf',
+        locals())
+
+def build_test_program():
+    run('nasm {asflags} src/syscall.s -o obj/syscall.o', locals())
+    run('g++ {user_cflags} obj/syscall.o -Isrc src/test_program/test_program.cc -o obj/test_program.elf',
+        locals())
 
 def build_iso():
     run('mkdir -p obj/iso/boot/grub', {})
     run('mkdir -p obj/iso/modules', {})
     run('cp obj/kernel.elf obj/iso/boot', {})
-    run('cp obj/program.elf obj/iso/modules', {})
+    run('cp obj/terminal.elf obj/iso/modules', {})
+    run('cp obj/test_program.elf obj/iso/modules', {})
     run('cp grub.cfg obj/iso/boot/grub', {})
     run('grub-mkrescue /usr/lib/grub/i386-pc -o obj/os.iso obj/iso', {})
     run('rm -r obj/iso', {})
@@ -98,7 +105,8 @@ def build():
     os.system('mkdir -p obj/builtins')
 
     build_kernel()
-    build_program()
+    build_test_program()
+    build_terminal_driver()
     build_iso()
 
 def build_tests():

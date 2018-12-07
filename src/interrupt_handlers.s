@@ -3,8 +3,8 @@ extern syscall_handler_table
 
 global interrupt_handler_table
 global syscall_handler
-global scheduler_start
-global switch_address_space
+global SchedulerStart
+global SwitchAddressSpace
 
 struc thread_state
 ts_rip: resb 8
@@ -45,7 +45,7 @@ int%1_handler:
 
 ; This code is called at boot time to start scheduling.
 ; On function entry, rdi contains the ThreadState for the thread to start.
-scheduler_start:
+SchedulerStart:
   push qword[rdi + ts_ss]
   push qword[rdi + ts_rsp]
   push qword[rdi + ts_rflags]
@@ -53,7 +53,7 @@ scheduler_start:
   push qword[rdi + ts_rip]
   iretq
 
-switch_address_space:
+SwitchAddressSpace:
   mov cr3, rdi
   ret
 
