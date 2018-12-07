@@ -3,7 +3,6 @@
 #include "allocator.h"
 #include "elf.h"
 #include "frame_allocator.h"
-#include "framebuffer.h"
 #include "interrupts.h"
 #include "io.h"
 #include "lazy_global.h"
@@ -71,16 +70,8 @@ void kernel_physical_end();
 
 void kmain(const char* multiboot_info) {
   IoPorts io;
-  FrameBuffer fb((char*)0xb8000, &io);
-
-  fb.Clear();
-
-  fb.WriteString("Hello world\nHi \n", FrameBuffer::kBlack, FrameBuffer::kWhite);
-
   serial_port.emplace(&io);
   g_serial = &serial_port.value();
-
-  g_serial->Printf("Hello world\nThis is serial %d -- %p\n", sizeof(void*), &fb);
 
   g_serial->Printf("Kernel start = %p\n", (void *)kernel_physical_start);
   g_serial->Printf("Kernel end = %p\n", (void *)kernel_physical_end);
@@ -101,9 +92,13 @@ void kmain(const char* multiboot_info) {
   thread_allocator.emplace();
   g_thread_allocator = &thread_allocator.value();
 
+  phys_addr_t syscall_stack_phys = g_frame_allocator->AllocateFrame();
+  virt_addr_t syscall_stack_virt = PhysicalToVirtual(syscall_stack_phys);
+  virt_addr_t syscall_stack_top = syscall_stack_virt + kPageSize - Scheduler::SysCallStackAdjustment();
+
   VMEnv env;
   vm.emplace(&env);
-  vm->Load();
+  vm->Load(syscall_stack_top);
   g_vm = &vm.value();
 
   g_serial->Printf("Protection setup worked. Going to user mode.\n");
@@ -115,19 +110,19 @@ void kmain(const char* multiboot_info) {
   // Disable the timer interrupt.
   intr.Mask(0, false);
 
-  scheduler.emplace();
+  scheduler.emplace(syscall_stack_top);
   g_scheduler = &scheduler.value();
 
   LoadModules(multiboot_reader);
 
-  RefPtr<AddressSpace> idle_as = new AddressSpace(true);
+  RefPtr<AddressSpace> idle_as = new AddressSpace();
   Thread* idle_task = idle_as->CreateThread(virt_addr_t(&IdleTask), 2);
+  idle_task->SetKernelThread();
   idle_task->Start();
 
   scheduler->Start();
 
   // TODO:
-  // - Make it easier to add new system calls.
   // - Add system calls for IPC, waiting for interrupts.
   // - Try to write drivers for keyboard, PS2 mouse, timer(?).
   // - Preemptive multitasking with timer interrupt.

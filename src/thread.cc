@@ -15,22 +15,27 @@ Scheduler* g_scheduler;
 Thread::Thread(virt_addr_t start_func,
                virt_addr_t stack_ptr,
                const RefPtr<AddressSpace>& address_space,
-               int priority,
-               bool kernel_thread)
+               int priority)
   : state_{},
     start_func_(start_func),
     address_space_(address_space),
-    priority_(priority),
-    kernel_thread_(kernel_thread) {
+    priority_(priority) {
   assert_lt(priority, Scheduler::kNumQueues);
 
-  int request_priv = kernel_thread_ ? kKernelPrivilege : kUserPrivilege;
-
   state_.rip = start_func;
-  state_.cs = SegmentSelector(kernel_thread_ ? kKernelCodeSegmentIndex : kUserCodeSegmentIndex, request_priv).Serialize();
+  state_.cs = SegmentSelector(kUserCodeSegmentIndex, kUserPrivilege).Serialize();
   state_.rflags = (1 << 9); // Enable interrupts.
   state_.rsp = stack_ptr;
-  state_.ss = SegmentSelector(kernel_thread_ ? kKernelStackSegmentIndex : kUserStackSegmentIndex, request_priv).Serialize();
+  state_.ss = SegmentSelector(kUserStackSegmentIndex, kUserPrivilege).Serialize();
+}
+
+void Thread::SetKernelThread() {
+  state_.cs = SegmentSelector(kKernelCodeSegmentIndex, kKernelPrivilege).Serialize();
+  state_.ss = SegmentSelector(kKernelStackSegmentIndex, kKernelPrivilege).Serialize();
+}
+
+void Thread::AllowIo() {
+  state_.rflags |= 3 << 12; // Set the IOPL to 3.
 }
 
 void Thread::Start() {
@@ -39,10 +44,9 @@ void Thread::Start() {
   g_scheduler->Enqueue(this);
 }
 
-Scheduler::Scheduler() {
-  virt_addr_t stack_top = PhysicalToVirtual(g_vm->syscall_stack_top());
-  cpu_state_ = reinterpret_cast<CpuState*>(stack_top - sizeof(CpuState));
-
+Scheduler::Scheduler(virt_addr_t syscall_stack_reservation) {
+  assert_eq((syscall_stack_reservation + sizeof(CpuState)) % kPageSize, 0);
+  cpu_state_ = reinterpret_cast<CpuState*>(syscall_stack_reservation);
   *cpu_state_ = {};
 }
 

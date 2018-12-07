@@ -212,7 +212,6 @@ void VMEnv::LoadTSS(const SegmentSelector& selector) {
 }
 
 VM::VM(VMEnv* env) : env_(env) {
-  syscall_stack_ = g_frame_allocator->AllocateFrame();
 }
 
 void VM::AddGDTEntry(int number, const SegmentDescriptor& segdesc) {
@@ -230,10 +229,11 @@ struct InterruptHandlerEntry {
 
 extern "C" {
 extern InterruptHandlerEntry interrupt_handler_table[];
+extern void syscall_handler();
 extern void load_cs_selector();
 }
 
-void VM::Load() {
+void VM::Load(virt_addr_t syscall_stack_top) {
   // Kernel code segment.
   AddGDTEntry(kKernelCodeSegmentIndex,
               SegmentDescriptor().set_required_privileges(kKernelPrivilege).set_type(SegmentDescriptor::kCodeSegment));
@@ -252,8 +252,8 @@ void VM::Load() {
 
   // TSS.
   TaskStateSegment tss;
-  // FIXME: This is gross that protection needs to know what the layout used by the scheduler is.
-  tss.set_privileged_stack(0, PhysicalToVirtual(syscall_stack_ + kPageSize - sizeof(CpuState)));
+  tss.set_privileged_stack(0, syscall_stack_top);
+  tss.set_interrupt_stack(1, syscall_stack_top);
   tss.Serialize(tss_);
 
   SegmentDescriptor tss_desc;
@@ -271,7 +271,11 @@ void VM::Load() {
   for (int i = 0; interrupt_handler_table[i].handler != 0; i++) {
     const InterruptHandlerEntry& entry = interrupt_handler_table[i];
     g_serial->Printf("Handler %d = %d/%p\n", i, entry.number, entry.handler);
-    AddIDTEntry(entry.number, InterruptDescriptor().set_offset(entry.handler));
+    AddIDTEntry(entry.number, InterruptDescriptor().set_offset(entry.handler).set_interrupt_stack(1));
   }
+
+  // The system call handler.
+  AddIDTEntry(0x80, InterruptDescriptor().set_offset(reinterpret_cast<virt_addr_t>(syscall_handler)).set_interrupt_stack(1));
+
   env_->LoadIDT(virt_addr_t(&idt_), kNumIDTEntries * sizeof(InterruptDescriptor::Storage));
 }

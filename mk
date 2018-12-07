@@ -22,7 +22,7 @@ kernel_files = [
     'protection.cc',
     'serial.cc',
     'builtins/string.cc',
-    'syscall.s',
+    'system_calls.cc',
     'thread.cc',
 ]
 
@@ -47,7 +47,7 @@ kernel_cflags = (
 
 user_cflags = kernel_cflags
 
-kernel_asflags = '-f elf64'
+asflags = '-f elf64'
 
 kernel_ldflags = '-n -T link.ld'
 
@@ -64,7 +64,7 @@ def build_kernel_cc(inp, out):
     run('g++ {kernel_cflags} -c {inp} -o {out}', locals())
 
 def build_kernel_asm(inp, out):
-    run('nasm {kernel_asflags} {inp} -o {out}', locals())
+    run('nasm {asflags} {inp} -o {out}', locals())
 
 def build_kernel():
     obj_files = []
@@ -81,7 +81,8 @@ def build_kernel():
     run('ld {kernel_ldflags} {obj_files} -o obj/kernel.elf', locals())
 
 def build_program():
-    run('g++ {user_cflags} src/program/program.cc -o obj/program.elf', locals())
+    run('nasm {asflags} src/syscall.s -o obj/syscall.o', locals())
+    run('g++ {user_cflags} obj/syscall.o -Isrc src/framebuffer.cc src/io.cc src/program/program.cc -o obj/program.elf', locals())
 
 def build_iso():
     run('mkdir -p obj/iso/boot/grub', {})

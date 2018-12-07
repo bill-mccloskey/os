@@ -10,7 +10,7 @@ class Thread;
 
 class AddressSpace : public RefCounted {
 public:
-  AddressSpace(bool kernel_space = false);
+  AddressSpace();
 
   Thread* CreateThread(virt_addr_t start_func, int priority);
 
@@ -24,7 +24,6 @@ public:
 
 private:
   PageTableManager page_tables_;
-  bool kernel_space_ = false;
 };
 
 extern Allocator<AddressSpace>* g_address_space_allocator;

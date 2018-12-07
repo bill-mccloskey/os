@@ -6,7 +6,7 @@
 class FrameBuffer {
 public:
   static const int kWidth = 80;
-  static const int kHeight = 24;
+  static const int kHeight = 25;
 
   static const int kBlack = 0;
   static const int kBlue = 1;
@@ -16,6 +16,9 @@ public:
   static const int kMagenta = 5;
   static const int kBrown = 6;
   static const int kLightGray = 7;
+  static const int kMaxBackgroundColor = 7;
+
+  // Only for use as foreground colors.
   static const int kDarkGrey = 8;
   static const int kLightBlue = 9;
   static const int kLightGreen = 10;
@@ -32,6 +35,8 @@ public:
   void MoveCursor(int x, int y);
 
   void WriteString(const char* str, int fg, int bg);
+
+  void ScrollTo(int line);
 
 private:
   void WriteCell(int x, int y, char c, int fg, int bg);

@@ -94,7 +94,7 @@ public:
   }
   TaskStateSegment& set_interrupt_stack(int index, virt_addr_t stack) {
     // FIXME: Assert index < kNumInterruptStacks
-    interrupt_stacks_[index] = stack;
+    interrupt_stacks_[index - 1] = stack;
     return *this;
   }
 
@@ -121,10 +121,7 @@ class VM {
 public:
   VM(VMEnv* env);
 
-  void Load();
-
-  phys_addr_t syscall_stack() const { return syscall_stack_; }
-  phys_addr_t syscall_stack_top() const { return syscall_stack_ + kPageSize; }
+  void Load(virt_addr_t syscall_stack_top);
 
 private:
   void AddGDTEntry(int number, const SegmentDescriptor& segdesc);
@@ -137,8 +134,6 @@ private:
 
   static const int kNumIDTEntries = 256;
   InterruptDescriptor::Storage idt_[kNumIDTEntries] __attribute__((aligned(8))) = {};
-
-  phys_addr_t syscall_stack_;
 
   TaskStateSegment::Storage tss_ __attribute__((aligned(8))) = {};
 };

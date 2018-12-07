@@ -17,24 +17,6 @@ static const int kEndOfInterruptCommand = 0x20;
 extern "C" {
 
 void kinterrupt(int64_t interrupt_number, uint64_t error_code) {
-  if (interrupt_number == 128) {
-    ThreadState* thread = g_scheduler->current_thread_state();
-    if (thread->rdi == 1) {
-      // write_byte(c)
-      char c = thread->rsi;
-      g_serial->WriteByte(c);
-    } else if (thread->rdi == 2) {
-      // reschedule()
-      g_scheduler->Reschedule();
-    } else if (thread->rdi == 3) {
-      // exit()
-      g_scheduler->ExitThread();
-    } else {
-      panic("Unknown syscall");
-    }
-    return;
-  }
-
   g_serial->Printf("Interrupt %d received\n", interrupt_number);
 
   // Timer

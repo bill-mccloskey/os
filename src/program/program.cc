@@ -1,3 +1,6 @@
+#include "framebuffer.h"
+#include "io.h"
+
 struct S {
   int a;
   char b;
@@ -12,22 +15,35 @@ void func() {
 
 using uint64_t = unsigned long;
 
-__asm__(
-  ".globl syscall\n"
-  "syscall:\n"
-  "int $0x80\n"
-  "ret\n");
+extern "C" {
+void sys_write_byte(char c);
+void sys_reschedule();
+void sys_exit_thread();
+}
+
+void PrintString(const char* s) {
+  for (int i = 0; s[i]; i++) {
+    sys_write_byte(s[i]);
+  }
+}
 
 extern "C" {
-uint64_t syscall(uint64_t number, uint64_t arg1 = 0, uint64_t arg2 = 0, uint64_t arg3 = 0,
-                 uint64_t arg4 = 0, uint64_t arg5 = 0);
+void _start() {
+  IoPorts io;
+  FrameBuffer fb((char*)0xb8000, &io);
 
-int _start() {
-  asm("xchg %bx, %bx");
-  syscall(3);
-  int x = 12;
-  func();
-  for (int i = 0; i < x; i++) {}
-  return x;
+  fb.Clear();
+
+  fb.WriteString("Hello from user space!\n", FrameBuffer::kWhite, FrameBuffer::kBlack);
+  fb.WriteString("This is a test\n", FrameBuffer::kCyan, FrameBuffer::kRed);
+  for (int i = 0; i < 10; i++) {
+    fb.WriteString("This is a line\n", FrameBuffer::kCyan, FrameBuffer::kBlack);
+  }
+  fb.MoveCursor(0, 0);
+
+  fb.ScrollTo(5);
+
+  PrintString("Hello from the program!\n");
+  sys_exit_thread();
 }
 }

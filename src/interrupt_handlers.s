@@ -1,5 +1,8 @@
 extern kinterrupt
+extern syscall_handler_table
+
 global interrupt_handler_table
+global syscall_handler
 global scheduler_start
 global switch_address_space
 
@@ -54,9 +57,64 @@ switch_address_space:
   mov cr3, rdi
   ret
 
+%macro restore_thread_regs 0
+  ; Layout of the stack at this time:
+  ; INTERRUPT_STACK_HIGH:
+  ;   CpuState::previous_thread [rsp + 8]
+  ;   CpuState::current_thread [rsp + 0]
+
+  mov rax, qword[rsp]           ; Copy CpuState::current_thread to rax
+  mov rcx, qword[rax + ts_rcx]
+  mov rdx, qword[rax + ts_rdx]
+  mov rsi, qword[rax + ts_rsi]
+  mov rdi, qword[rax + ts_rdi]
+  mov r8, qword[rax + ts_r8]
+  mov r9, qword[rax + ts_r9]
+  mov r10, qword[rax + ts_r10]
+  mov r11, qword[rax + ts_r11]
+  push qword[rax + ts_ss]
+  push qword[rax + ts_rsp]
+  push qword[rax + ts_rflags]
+  push qword[rax + ts_cs]
+  push qword[rax + ts_rip]
+  mov rax, qword[rax + ts_rax]
+%endmacro
+
+syscall_handler:
+  ; AMD64 ABI:
+  ; rbx, rbp, and r12-r15 are callee-saved registers.
+  ; Others are caller-saved.
+  ; Arguments passed in: rdi, rsi, rdx, rcx, r8, r9.
+  ; rax is the return value.
+
+  ; Layout of the stack at this time:
+  ; INTERRUPT_STACK_HIGH: (the top of the page allocated for interrupts)
+  ;   CpuState::previous_thread [rsp + 48]
+  ;   CpuState::current_thread [rsp + 40]
+  ;   ss [rsp + 32]
+  ;   rsp [rsp + 24]
+  ;   rflags [rsp + 16]
+  ;   cs [rsp + 8]
+  ;   rip [rsp + 0]
+
+  mov r10, qword[rsp + 40]      ; Store CpuState::current_thread in r10
+  pop qword[r10 + ts_rip]
+  pop qword[r10 + ts_cs]
+  pop qword[r10 + ts_rflags]
+  pop qword[r10 + ts_rsp]
+  pop qword[r10 + ts_ss]
+
+  mov r10, syscall_handler_table
+  mov r11, qword[r10 + rax * 8]
+  call r11
+
+  restore_thread_regs
+
+  iretq
+
 common_interrupt_handler:
   ; Bochs debugging instruction.
-  xchg bx, bx
+  ;xchg bx, bx
 
   ; Push rax so we have a free register to work with.
   push rax
@@ -96,28 +154,9 @@ common_interrupt_handler:
   call kinterrupt
   ; kinterrupt returns nothing in rax.
 
-  ; Layout of the stack at this time:
-  ; INTERRUPT_STACK_HIGH:
-  ;   CpuState::previous_thread [rsp + 8]
-  ;   CpuState::current_thread [rsp + 0]
+  restore_thread_regs
 
-  mov rax, qword[rsp]           ; Copy CpuState::current_thread to rax
-  mov rcx, qword[rax + ts_rcx]
-  mov rdx, qword[rax + ts_rdx]
-  mov rsi, qword[rax + ts_rsi]
-  mov rdi, qword[rax + ts_rdi]
-  mov r8, qword[rax + ts_r8]
-  mov r9, qword[rax + ts_r9]
-  mov r10, qword[rax + ts_r10]
-  mov r11, qword[rax + ts_r11]
-  push qword[rax + ts_ss]
-  push qword[rax + ts_rsp]
-  push qword[rax + ts_rflags]
-  push qword[rax + ts_cs]
-  push qword[rax + ts_rip]
-  mov rax, qword[rax + ts_rax]
-
-  xchg bx, bx
+  ;xchg bx, bx
 
   iretq
 
@@ -159,8 +198,6 @@ handler_no_error 44
 handler_no_error 45
 handler_no_error 46
 handler_no_error 47
-
-handler_no_error 128
 
 align 8
 interrupt_handler_table:
@@ -236,7 +273,5 @@ interrupt_handler_table:
   dd 46
   dq int47_handler
   dd 47
-  dq int128_handler
-  dd 128
   dq 0
   dd 0

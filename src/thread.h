@@ -37,8 +37,13 @@ public:
   Thread(virt_addr_t start_func,
          virt_addr_t stack_ptr,
          const RefPtr<AddressSpace>& address_space,
-         int priority,
-         bool kernel_thread = false);
+         int priority);
+
+  // The thread runs with CPL = 0.
+  void SetKernelThread();
+
+  // Thread can call in/out instructions.
+  void AllowIo();
 
   void Start();
 
@@ -59,7 +64,6 @@ private:
   virt_addr_t start_func_;
   RefPtr<AddressSpace> address_space_;
   int priority_;
-  bool kernel_thread_;
   Status status_ = kBlocked;
   Thread* next_thread_ = nullptr;
   Thread* prev_thread_ = nullptr;
@@ -69,7 +73,7 @@ extern Allocator<Thread>* g_thread_allocator;
 
 class Scheduler {
 public:
-  Scheduler();
+  Scheduler(virt_addr_t syscall_stack_reservation);
 
   // Starts the scheduler and runs the highest priority thread.
   void Start();
@@ -83,6 +87,9 @@ public:
   void DumpState();
 
   ThreadState* current_thread_state() { return &running_thread_->state_; }
+
+  // Amount of space to reserve at the top of the syscall stack for the scheduler.
+  static size_t SysCallStackAdjustment() { return sizeof(CpuState); }
 
 private:
   friend class Thread;

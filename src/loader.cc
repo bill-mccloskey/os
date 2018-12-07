@@ -56,11 +56,74 @@ private:
   RefPtr<AddressSpace> address_space_;
 };
 
+static bool StringIs(const char* start, const char* end, const char* cmp) {
+  const char* p = start;
+  while (p < end) {
+    if (*p != *cmp) return false;
+    p++;
+    cmp++;
+  }
+  return true;
+}
+
+static phys_addr_t ParseAddress(const char* start, const char* end) {
+  phys_addr_t addr = 0;
+  while (start < end) {
+    addr <<= 4;
+
+    if (*start >= '0' && *start <= '9') addr |= *start - '0';
+    else if (*start >= 'a' && *start <= 'f') addr |= *start - 'a' + 10;
+    else panic("Invalid address for map argument");
+
+    start++;
+  }
+
+  return addr;
+}
+
+static void ParseArguments(const char* args, const RefPtr<AddressSpace>& as, Thread* thread) {
+  const char* p = args;
+  while (*p) {
+    const char* key = p;
+    const char* end_key = p;
+    while (*end_key && *end_key != '=') end_key++;
+    if (*end_key != '=') panic("Invalid command line argument");
+
+    const char* value = end_key + 1;
+    const char* end_value = value;
+    while (*end_value && *end_value != ' ') end_value++;
+
+    if (StringIs(key, end_key, "map")) {
+      const char* comma = value;
+      while (comma < end_value && *comma != ',') comma++;
+      if (comma == end_value) panic("Invalid memory range for map argument");
+
+      phys_addr_t start = ParseAddress(value, comma);
+      phys_addr_t end = ParseAddress(comma + 1, end_value);
+      g_serial->Printf("Mapping to userspace: %p to %p\n", start, end);
+      as->Map(start, end, start, end, PageAttributes());
+    } else if (StringIs(key, end_key, "allow_io")) {
+      if (StringIs(value, end_value, "true")) {
+        thread->AllowIo();
+      } else if (StringIs(value, end_value, "false")) {
+        // Do nothing. This is the default.
+      } else {
+        panic("Unrecognized allow_io argument");
+      }
+    } else {
+      panic("Unrecognized command line argument");
+    }
+
+    p = end_value;
+    while (*p == ' ') p++;
+  }
+}
+
 class MultibootLoaderVisitor : public MultibootVisitor {
 public:
   MultibootLoaderVisitor() {}
 
-  void Module(const char* label, uint32_t module_start, uint32_t module_end) override {
+  void Module(const char* args, uint32_t module_start, uint32_t module_end) override {
     RefPtr<AddressSpace> as = new AddressSpace();
 
     virt_addr_t start_addr = PhysicalToVirtual(module_start);
@@ -72,6 +135,9 @@ public:
     reader.Read(&loader_visitor);
 
     Thread* thread = as->CreateThread(reader.entry_point(), 0);
+
+    ParseArguments(args, as, thread);
+
     thread->Start();
   }
 };
