@@ -4,27 +4,34 @@ import os
 import sys
 
 kernel_files = [
-    'address_space.cc',
-    'assertions.cc',
-    'elf.cc',
-    'framebuffer.cc',
-    'frame_allocator.cc',
-    'interrupt_handlers.s',
-    'interrupts.cc',
-    'io.cc',
-    'kmain.cc',
-    'loader.cc',
-    'loader32.s',
-    'loader64.s',
-    'multiboot_header.s',
-    'multiboot.cc',
-    'output_stream.cc',
-    'page_tables.cc',
-    'protection.cc',
-    'serial.cc',
+    'base/io.cc',
+    'base/output_stream.cc',
     'builtins/string.cc',
-    'system_calls.cc',
-    'thread.cc',
+    'kernel/address_space.cc',
+    'kernel/assertions.cc',
+    'kernel/elf.cc',
+    'kernel/frame_allocator.cc',
+    'kernel/interrupt_handlers.s',
+    'kernel/interrupts.cc',
+    'kernel/kmain.cc',
+    'kernel/loader.cc',
+    'kernel/loader32.s',
+    'kernel/loader64.s',
+    'kernel/multiboot_header.s',
+    'kernel/multiboot.cc',
+    'kernel/page_tables.cc',
+    'kernel/protection.cc',
+    'kernel/serial.cc',
+    'kernel/system_calls.cc',
+    'kernel/thread.cc',
+]
+
+terminal_files = [
+    'base/io.cc',
+    'base/output_stream.cc',
+    'usr/syscall.s',
+    'drivers/terminal/framebuffer.cc',
+    'drivers/terminal/terminal.cc',
 ]
 
 test_files = [
@@ -38,30 +45,26 @@ extra_test_files = {
     'page_tables_test.cc': 'src/frame_allocator.cc src/page_tables.cc'
 }
 
-kernel_compiler = 'x86_64-elf-g++'
-#kernel_compiler = 'clang++ --target=x86_64-pc-none-elf'
+#compiler = 'x86_64-elf-g++'
+compiler = 'clang++ --target=x86_64-pc-none-elf'
 
-kernel_cflags = (
+cflags = (
     '-std=c++14 -march=x86-64 ' +
     '-ffreestanding  -fno-builtin -nostdlib -nostdinc++ ' +
     '-fno-stack-protector -mno-red-zone -mcmodel=large ' +
     '-mno-mmx -mno-sse -mno-sse2 -fno-rtti ' +
     '-fomit-frame-pointer -fno-exceptions -fno-asynchronous-unwind-tables -fno-unwind-tables ' +
     '-Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-const-variable ' +
-    '-isystem src/builtins'
+    '-isystem src/builtins ' +
+    '-Isrc/base '
 )
 
-user_compiler = 'x86_64-elf-g++'
-#user_compiler = 'clang++ --target=x86_64-pc-none-elf'
-user_cflags = kernel_cflags
-
-test_compiler = 'g++'
-#test_compiler = 'clang++ --target=x86_64-pc-none-elf'
-test_cflags = kernel_cflags
+#test_compiler = 'g++'
+test_compiler = 'clang++ --target=x86_64-pc-none-elf'
+test_cflags = cflags
 
 asflags = '-f elf64'
-
-kernel_ldflags = '-n -T link.ld'
+ldflags = '-n -T link.ld'
 
 def run(cmd, d):
     d = d.copy()
@@ -72,52 +75,60 @@ def run(cmd, d):
     if code:
         sys.exit(code)
 
-def build_kernel_cc(inp, out):
-    run('{kernel_compiler} {kernel_cflags} -c {inp} -o {out}', locals())
+def build_cc(inp, out):
+    run('{compiler} {cflags} -c {inp} -o {out}', locals())
 
-def build_kernel_asm(inp, out):
+def build_asm(inp, out):
     run('nasm {asflags} {inp} -o {out}', locals())
 
-def build_kernel():
+def build_files(files):
     obj_files = []
-    for f in kernel_files:
+    for f in files:
         if f.endswith('.cc'):
             objfile = 'obj/' + f.replace('.cc', '.o')
-            build_kernel_cc('src/' + f, objfile)
+            build_cc('src/' + f, objfile)
         elif f.endswith('.s'):
             objfile = 'obj/' + f.replace('.s', '.o')
-            build_kernel_asm('src/' + f, objfile)
+            build_asm('src/' + f, objfile)
         obj_files.append(objfile)
 
+    return obj_files
+
+def build_kernel():
+    obj_files = build_files(kernel_files)
     obj_files = ' '.join(obj_files)
-    run('ld {kernel_ldflags} {obj_files} -o obj/kernel.elf', locals())
+    run('ld {ldflags} {obj_files} -o obj/kernel.elf', locals())
 
 def build_terminal_driver():
-    run('nasm {asflags} src/syscall.s -o obj/syscall.o', locals())
-    run('{user_compiler} {user_cflags} obj/syscall.o -Isrc src/framebuffer.cc src/io.cc src/output_stream.cc src/drivers/terminal/terminal.cc -o obj/terminal.elf',
-        locals())
+    obj_files = build_files(terminal_files)
+    obj_files = ' '.join(obj_files)
+    run('{compiler} {cflags} {obj_files} -o obj/terminal.elf', locals())
 
-def build_test_program():
-    run('nasm {asflags} src/syscall.s -o obj/syscall.o', locals())
-    run('{user_compiler} {user_cflags} obj/syscall.o -Isrc src/test_program/test_program.cc -o obj/test_program.elf',
-        locals())
+#def build_test_program():
+#    run('nasm {asflags} src/syscall.s -o obj/syscall.o', locals())
+#    run('{user_compiler} {user_cflags} obj/syscall.o -Isrc src/test_program/test_program.cc -o obj/test_program.elf',
+#        locals())
 
 def build_iso():
     run('mkdir -p obj/iso/boot/grub', {})
     run('mkdir -p obj/iso/modules', {})
     run('cp obj/kernel.elf obj/iso/boot', {})
     run('cp obj/terminal.elf obj/iso/modules', {})
-    run('cp obj/test_program.elf obj/iso/modules', {})
+    #run('cp obj/test_program.elf obj/iso/modules', {})
     run('cp grub.cfg obj/iso/boot/grub', {})
     run('grub-mkrescue /usr/lib/grub/i386-pc -o obj/os.iso obj/iso', {})
     run('rm -r obj/iso', {})
 
 def build():
     os.system('mkdir -p obj')
+    os.system('mkdir -p obj/kernel')
+    os.system('mkdir -p obj/base')
+    os.system('mkdir -p obj/usr')
+    os.system('mkdir -p obj/drivers/terminal')
     os.system('mkdir -p obj/builtins')
 
     build_kernel()
-    build_test_program()
+    #build_test_program()
     build_terminal_driver()
     build_iso()
 
