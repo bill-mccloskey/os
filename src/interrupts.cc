@@ -142,7 +142,7 @@ void InterruptController::UnregisterForInterrupts(Thread* thread) {
 }
 
 void InterruptController::Interrupt(int irq) {
-  g_serial->Printf("IRQ %d received\n", irq);
+  //g_serial->Printf("IRQ %d received\n", irq);
 
   // Timer
   if (irq == 0) {
@@ -155,13 +155,4 @@ void InterruptController::Interrupt(int irq) {
     Thread* thread = registrations_[irq];
     thread->NotifyFromKernel();
   }
-
-#if 0
-  // Keyboard
-  if (irq == 1) {
-    unsigned char scan_code = inb(0x60);
-    g_serial->Printf("Keyboard scancode = %u\n", scan_code);
-    outb(kPrimaryCommandPort, kEndOfInterruptCommand);
-  }
-#endif
 }

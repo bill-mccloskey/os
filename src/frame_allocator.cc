@@ -9,10 +9,23 @@ void FrameAllocator::AddRegion(phys_addr_t start_addr, phys_addr_t end_addr) {
   assert_eq(start_addr & (kPageSize - 1), 0);
   assert_eq(end_addr & (kPageSize - 1), 0);
 
+  if (start_addr >= end_addr) return;
+
   // It's not a good idea to treat 0 as an allocated page.
   if (start_addr == 0) {
     start_addr += kPageSize;
     if (start_addr >= end_addr) return;
+  }
+
+  if (start_addr >= kernel_start_addr_ && start_addr < kernel_end_addr_) {
+    start_addr = kernel_end_addr_;
+    if (start_addr >= end_addr) return;
+  }
+
+  if (kernel_start_addr_ >= start_addr && kernel_start_addr_ < end_addr) {
+    AddRegion(start_addr, kernel_start_addr_);
+    AddRegion(kernel_end_addr_, end_addr);
+    return;
   }
 
   regions_[num_regions_].start_addr = start_addr;

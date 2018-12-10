@@ -22,7 +22,7 @@ class MultibootPrintVisitor : public MultibootVisitor {
   }
 
   void Module(const char* label, uint32_t module_start, uint32_t module_end) override {
-    g_serial->Printf("    module %s: %p to %p\n", label, module_start, module_end);
+    g_serial->Printf("    module %s: %x to %x\n", label, module_start, module_end);
   }
 
   void StartMemoryMap() override {
@@ -30,7 +30,7 @@ class MultibootPrintVisitor : public MultibootVisitor {
   }
 
   void MemoryMapEntry(uint64_t base_addr, uint64_t length, MemoryMapEntryType type) override {
-    g_serial->Printf("    entry @%p size=%x, type=%d\n", base_addr, (unsigned)length, (int)type);
+    g_serial->Printf("    entry @%p size=%x, type=%d\n", (void*)base_addr, (unsigned)length, (int)type);
   }
 };
 
@@ -131,6 +131,10 @@ void kmain(const char* multiboot_info) {
 
   // This code exits qemu.
   //outb(0xf4, 0);
+}
+
+void __cxa_pure_virtual() {
+  panic("Pure virtual function invoked");
 }
 
 }

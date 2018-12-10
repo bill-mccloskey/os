@@ -16,7 +16,6 @@ Thread::Thread(virt_addr_t start_func,
                int priority)
   : id_(g_thread_id++),
     state_{},
-    start_func_(start_func),
     address_space_(address_space),
     priority_(priority) {
   assert_lt(priority, Scheduler::kNumQueues);
@@ -183,7 +182,7 @@ void Scheduler::RunThread(Thread* thread, bool requeue) {
     cpu_state_->previous_thread = nullptr;
   }
 
-  g_serial->Printf("Scheduling thread %p\n", thread->state_.rip);
+  //g_serial->Printf("Scheduling thread %p\n", (void*)thread->state_.rip);
 
   running_thread_ = thread;
   thread->status_ = Thread::kRunning;
@@ -215,7 +214,7 @@ void Scheduler::Start() {
 
 void Scheduler::DumpState() {
   Thread* thread = running_thread_;
-  g_serial->Printf("rip = %p\n", thread->state_.rip);
+  g_serial->Printf("rip = %p\n", (void*)thread->state_.rip);
 }
 
 void Scheduler::AddThread(Thread* thread) {

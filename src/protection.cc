@@ -270,7 +270,7 @@ void VM::Load(virt_addr_t syscall_stack_top) {
 
   for (int i = 0; interrupt_handler_table[i].handler != 0; i++) {
     const InterruptHandlerEntry& entry = interrupt_handler_table[i];
-    g_serial->Printf("Handler %d = %d/%p\n", i, entry.number, entry.handler);
+    g_serial->Printf("Handler %d = %d/%p\n", i, entry.number, (void*)entry.handler);
     AddIDTEntry(entry.number, InterruptDescriptor().set_offset(entry.handler).set_interrupt_stack(1));
   }
 

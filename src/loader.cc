@@ -14,7 +14,7 @@ public:
   ElfLoaderVisitor(const RefPtr<AddressSpace>& as) : address_space_(as) {}
 
   void LoadSegment(int flags, const char* data, size_t size, virt_addr_t load_addr, size_t load_size) override {
-    g_serial->Printf("  Would load segment (flags=%d) at %p, size=%d/%d\n", flags, load_addr, (int)size, (int)load_size);
+    g_serial->Printf("  Would load segment (flags=%d) at %p, size=%d/%d\n", flags, (void*)load_addr, (int)size, (int)load_size);
 
     assert_le(size, load_size);
 
@@ -100,7 +100,7 @@ static void ParseArguments(const char* args, const RefPtr<AddressSpace>& as, Thr
 
       phys_addr_t start = ParseNum(16, value, comma);
       phys_addr_t end = ParseNum(16, comma + 1, end_value);
-      g_serial->Printf("Mapping to userspace: %p to %p\n", start, end);
+      g_serial->Printf("Mapping to userspace: %p to %p\n", (void*)start, (void*)end);
       as->Map(start, end, start, end, PageAttributes());
     } else if (StringIs(key, end_key, "allow_io")) {
       if (StringIs(value, end_value, "true")) {

@@ -88,7 +88,6 @@ private:
 
   int id_;
   ThreadState state_;
-  virt_addr_t start_func_;
   RefPtr<AddressSpace> address_space_;
   int priority_;
   Status status_ = kStarting;

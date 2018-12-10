@@ -17,7 +17,7 @@ static virt_addr_t MakeAddressForTables(uint64_t tab1, uint64_t tab2, uint64_t t
   EXPECT_EQ(tab3 & ~0x1ff, 0);
   EXPECT_EQ(tab4 & ~0x1ff, 0);
 
-  virt_addr_t addr = ((tab1 << (9*3)) + (tab2 << (9*2)) + (tab3 << (9*1)) + (tab4 << (9*0)) << 12);
+  virt_addr_t addr = (((tab1 << (9*3)) + (tab2 << (9*2)) + (tab3 << (9*1)) + (tab4 << (9*0))) << 12);
   if (addr & (virt_addr_t(1) << 47)) addr |= ~virt_addr_t((virt_addr_t(1) << 48) - 1);
   return addr;
 }

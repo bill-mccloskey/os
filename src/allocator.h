@@ -58,7 +58,7 @@ private:
   };
 
   static const size_t kMinSize = sizeof(FreeObject);
-  static_assert(sizeof(T) >= kMinSize);
+  static_assert(sizeof(T) >= kMinSize, "sizeof(T) is too small");
 
   void ClearPage(virt_addr_t virt) {
     virt_addr_t end = virt + kObjectsPerPage * kAllocationSize;

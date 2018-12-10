@@ -2,14 +2,13 @@
 #define serial_h
 
 #include "io.h"
+#include "output_stream.h"
 
-class SerialPort {
+class SerialPort : public OutputStream {
 public:
   SerialPort(IoPorts* io, int com = 1, int baud_divisor = 1);
 
-  void WriteByte(char c);
-  void WriteString(const char* s);
-  void Printf(const char* fmt, ...);
+  void OutputChar(char c) override;
 
 private:
   bool IsTransmitFifoEmpty();

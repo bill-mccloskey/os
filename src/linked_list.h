@@ -2,6 +2,7 @@
 #define linked_list_h
 
 #include "assertions.h"
+#include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -50,7 +51,7 @@ private:
 };
 
 #define LINKED_LIST(T, entry_field) \
-  LinkedList<T, (size_t)&((T*)0)->entry_field>
+  LinkedList<T, offsetof(T, entry_field)>
 
 template<typename T, size_t entry_offset>
 class LinkedList {

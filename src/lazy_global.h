@@ -21,55 +21,55 @@ public:
     return *new(repr_) T(args...);
   }
 
-  constexpr const T* operator->() const {
+  const T* operator->() const {
     assert(initialized_);
     return reinterpret_cast<const T*>(repr_);
   }
 
-  constexpr T* operator-> () {
+  T* operator-> () {
     assert(initialized_);
     return reinterpret_cast<T*>(repr_);
   }
 
-  constexpr T& operator*() & {
+  T& operator*() & {
     assert(initialized_);
     return *reinterpret_cast<T*>(repr_);
   }
 
-  constexpr const T&& operator*() const && {
+  const T&& operator*() const && {
     assert(initialized_);
     return *reinterpret_cast<const T*>(repr_);
   }
 
-  constexpr T&& operator*() && {
+  T&& operator*() && {
     assert(initialized_);
     return *reinterpret_cast<T*>(repr_);
   }
 
-  constexpr explicit operator bool() const noexcept {
+  explicit operator bool() const noexcept {
     return initialized_;
   }
 
-  constexpr bool has_value() const noexcept {
+  bool has_value() const noexcept {
     return initialized_;
   }
 
-  constexpr T& value() & {
+  T& value() & {
     assert(initialized_);
     return *reinterpret_cast<T*>(repr_);
   }
 
-  constexpr const T& value() const & {
+  const T& value() const & {
     assert(initialized_);
     return *reinterpret_cast<const T*>(repr_);
   }
 
-  constexpr T&& value() && {
+  T&& value() && {
     assert(initialized_);
     return *reinterpret_cast<T*>(repr_);
   }
 
-  constexpr const T&& value() const && {
+  const T&& value() const && {
     assert(initialized_);
     return *reinterpret_cast<const T*>(repr_);
   }

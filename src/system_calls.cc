@@ -11,7 +11,7 @@ void SysNull() {
 }
 
 void SysWriteByte(char c) {
-  g_serial->WriteByte(c);
+  g_serial->OutputChar(c);
 }
 
 void SysReschedule() {

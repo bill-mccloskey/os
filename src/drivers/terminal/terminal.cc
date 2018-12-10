@@ -1,19 +1,6 @@
 #include "framebuffer.h"
 #include "io.h"
-
-struct S {
-  int a;
-  char b;
-};
-
-S global1[1000];
-S global2[1000] = {{100, 10}};
-
-void func() {
-  global1[0].a = global2[0].a;
-}
-
-using uint64_t = unsigned long;
+#include "output_stream.h"
 
 extern "C" {
 void SysWriteByte(char c);
@@ -28,43 +15,29 @@ void SysRequestInterrupt(int irq);
 void SysAckInterrupt(int irq);
 }
 
-void PrintString(const char* s) {
-  for (int i = 0; s[i]; i++) {
-    SysWriteByte(s[i]);
+class DebugOutputStream : public OutputStream {
+public:
+  void OutputChar(char c) override {
+    SysWriteByte(c);
   }
-}
+};
 
-static void num_to_string(long n, char* buf, int base) {
-  long digits = 0;
-  long x = n;
-  while (x != 0) {
-    x /= base;
-    digits++;
-  }
+// Line discipline: You put characters from the keyboard (or whatever) into it.
+// It keeps a buffer for the program to read from. It also decides when that buffer
+// should be "released" to the program. Finally, it decides what characters should
+// be echoed to the screen.
 
-  if (n == 0) {
-    buf[0] = '0';
-    buf[1] = 0x00;
-    return;
-  }
+// The terminal display takes characters in, either from the program or from the
+// line displine.
 
-  if (n < 0) {
-    buf[0] = '-';
-    buf++;
-    n = -n;
-  }
+// Should read commands that are sent to the terminal driver be synchronous or
+// asynchronous? Seems like async would be better. You'll ask it to start a read,
+// and it will tell you when the read is done.
 
-  buf[digits] = 0x00;
-  while (n != 0) {
-    int digit = n % base;
-    if (digit <= 9) {
-      buf[--digits] = digit + '0';
-    } else {
-      buf[--digits] = digit - 10 + 'a';
-    }
-    n /= base;
-  }
-}
+// How will the Unix process manage all the I/O it has to do with various drivers
+// and things? Perhaps it would be better if it used lots of threads, and each
+// user thread communicated with its own thread in the Unix process? Then it would
+// make more sense for driver I/O to be sync.
 
 extern "C" {
 void _start() {
@@ -82,24 +55,32 @@ void _start() {
 
   fb.ScrollTo(5);
 
-  PrintString("terminal: Hello from the terminal!\n");
+  DebugOutputStream stream;
+
+  stream.Printf("terminal: Hello from the terminal!\n");
 
   SysRequestInterrupt(1);
 
   for (;;) {
     int sender, type, payload;
     SysReceive(&sender, &type, &payload);
-    PrintString("terminal: got key ");
 
     unsigned char scan_code = inb(0x60);
-    char buf[32];
-    num_to_string(scan_code, buf, 10);
-    PrintString(buf);
-    PrintString("\n");
+    if (scan_code == 0xe0) {
+      stream.Printf("terminal: escape (%x)!\n", scan_code);
+    } else if (scan_code & 0x80) {
+      stream.Printf("terminal: keyup %x\n", scan_code & 0x7f);
+    } else {
+      stream.Printf("terminal: keydown %x\n", scan_code);
+    }
 
     SysAckInterrupt(1);
   }
 
   SysExitThread();
+}
+
+void __cxa_pure_virtual() {
+  for (;;) {}
 }
 }
