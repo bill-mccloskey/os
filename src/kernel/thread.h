@@ -36,13 +36,13 @@ struct CpuState {
 struct SendInfo {
   int sender_tid;
   int type;
-  int payload;
+  uint64_t payload;
 };
 
 struct ReceiveInfo {
   int* sender_tid;
   int* type;
-  int* payload;
+  uint64_t* payload;
 };
 
 class Thread {
@@ -65,8 +65,8 @@ public:
   void set_id(int id) { id_ = id; }
   int priority() const { return priority_; }
 
-  void Send(int dest_tid, int type, int payload);
-  void Receive(int* sender_tid, int* type, int* payload);
+  void Send(int dest_tid, int type, uint64_t payload);
+  void Receive(int* sender_tid, int* type, uint64_t* payload);
   void Notify(int notify_tid);
   void NotifyFromKernel();
 

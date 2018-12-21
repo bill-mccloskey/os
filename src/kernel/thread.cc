@@ -51,7 +51,7 @@ void Thread::Start() {
   g_scheduler->Enqueue(this);
 }
 
-void Thread::Send(int dest_tid, int type, int payload) {
+void Thread::Send(int dest_tid, int type, uint64_t payload) {
   Thread* dest = g_scheduler->FindThread(dest_tid);
   // FIXME: Check for null dest.
   if (dest->status_ == kBlockedReceiving) {
@@ -75,7 +75,7 @@ void Thread::Send(int dest_tid, int type, int payload) {
   }
 }
 
-void Thread::Receive(int* sender_tid, int* type, int* payload) {
+void Thread::Receive(int* sender_tid, int* type, uint64_t* payload) {
   if (notified_) {
     notified_ = false;
     *sender_tid = 0;

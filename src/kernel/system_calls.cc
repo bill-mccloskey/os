@@ -22,11 +22,11 @@ void SysExitThread() {
   g_scheduler->ExitThread();
 }
 
-void SysSend(int dest_tid, int type, int payload) {
+void SysSend(int dest_tid, int type, uint64_t payload) {
   g_scheduler->current_thread()->Send(dest_tid, type, payload);
 }
 
-void SysReceive(int* sender_tid, int* type, int* payload) {
+void SysReceive(int* sender_tid, int* type, uint64_t* payload) {
   g_scheduler->current_thread()->Receive(sender_tid, type, payload);
 }
 

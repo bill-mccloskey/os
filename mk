@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os
+import os.path
 import sys
 
 kernel_files = [
@@ -26,23 +27,38 @@ kernel_files = [
     'kernel/thread.cc',
 ]
 
-terminal_files = [
+console_files = [
+    'base/io.cc',
+    'base/output_stream.cc',
+    'base/driver_assertions.cc',
+    'usr/syscall.s',
+    'drivers/console/framebuffer.cc',
+    'drivers/console/console.cc',
+    'drivers/console/emulator.cc',
+]
+
+keyboard_files = [
     'base/io.cc',
     'base/output_stream.cc',
     'usr/syscall.s',
-    'drivers/terminal/framebuffer.cc',
-    'drivers/terminal/terminal.cc',
+    'drivers/keyboard/keyboard.cc',
 ]
 
 test_files = [
-    'allocator_test.cc',
-    'page_tables_test.cc',
-    'linked_list_test.cc',
+    'kernel/allocator_test.cc',
+    'kernel/page_tables_test.cc',
+    'base/linked_list_test.cc',
+    'drivers/console/emulator_test.cc',
 ]
 
+test_data = {
+    'drivers/console/emulator_test.cc': 'drivers/console/emulator_test_data',
+}
+
 extra_test_files = {
-    'allocator_test.cc': 'src/frame_allocator.cc',
-    'page_tables_test.cc': 'src/frame_allocator.cc src/page_tables.cc'
+    'kernel/allocator_test.cc': ['kernel/frame_allocator.cc'],
+    'kernel/page_tables_test.cc': ['kernel/frame_allocator.cc', 'kernel/page_tables.cc'],
+    'drivers/console/emulator_test.cc': ['drivers/console/emulator.cc'],
 }
 
 #compiler = 'x86_64-elf-g++'
@@ -54,13 +70,13 @@ cflags = (
     '-fno-stack-protector -mno-red-zone -mcmodel=large ' +
     '-mno-mmx -mno-sse -mno-sse2 -fno-rtti ' +
     '-fomit-frame-pointer -fno-exceptions -fno-asynchronous-unwind-tables -fno-unwind-tables ' +
-    '-Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-const-variable ' +
+    '-Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-const-variable -Wno-missing-field-initializers ' +
     '-isystem src/builtins ' +
     '-Isrc/base '
 )
 
 #test_compiler = 'g++'
-test_compiler = 'clang++ --target=x86_64-pc-none-elf'
+test_compiler = 'clang++'
 test_cflags = cflags
 
 asflags = '-f elf64'
@@ -99,10 +115,15 @@ def build_kernel():
     obj_files = ' '.join(obj_files)
     run('ld {ldflags} {obj_files} -o obj/kernel.elf', locals())
 
-def build_terminal_driver():
-    obj_files = build_files(terminal_files)
+def build_console_driver():
+    obj_files = build_files(console_files)
     obj_files = ' '.join(obj_files)
-    run('{compiler} {cflags} {obj_files} -o obj/terminal.elf', locals())
+    run('{compiler} {cflags} {obj_files} -o obj/console.elf', locals())
+
+def build_keyboard_driver():
+    obj_files = build_files(keyboard_files)
+    obj_files = ' '.join(obj_files)
+    run('{compiler} {cflags} {obj_files} -o obj/keyboard.elf', locals())
 
 #def build_test_program():
 #    run('nasm {asflags} src/syscall.s -o obj/syscall.o', locals())
@@ -113,7 +134,8 @@ def build_iso():
     run('mkdir -p obj/iso/boot/grub', {})
     run('mkdir -p obj/iso/modules', {})
     run('cp obj/kernel.elf obj/iso/boot', {})
-    run('cp obj/terminal.elf obj/iso/modules', {})
+    run('cp obj/console.elf obj/iso/modules', {})
+    run('cp obj/keyboard.elf obj/iso/modules', {})
     #run('cp obj/test_program.elf obj/iso/modules', {})
     run('cp grub.cfg obj/iso/boot/grub', {})
     run('grub-mkrescue /usr/lib/grub/i386-pc -o obj/os.iso obj/iso', {})
@@ -124,12 +146,14 @@ def build():
     os.system('mkdir -p obj/kernel')
     os.system('mkdir -p obj/base')
     os.system('mkdir -p obj/usr')
-    os.system('mkdir -p obj/drivers/terminal')
+    os.system('mkdir -p obj/drivers/console')
+    os.system('mkdir -p obj/drivers/keyboard')
     os.system('mkdir -p obj/builtins')
 
     build_kernel()
     #build_test_program()
-    build_terminal_driver()
+    build_console_driver()
+    build_keyboard_driver()
     build_iso()
 
 def build_tests():
@@ -141,10 +165,17 @@ def build_tests():
     run('ar -rv obj/libgtest.a obj/gtest-all.o', locals())
 
     for f in test_files:
-        objfile = 'obj/tests/' + f.replace('.cc', '')
-        extra = extra_test_files.get(f, '')
-        run('{test_compiler} -g -DTESTING -std=c++14 -o {objfile} -Isrc -I{gtest}/include src/tests/{f} {extra} -pthread obj/libgtest.a',
+        objfile = 'obj/' + f.replace('.cc', '')
+        extra = extra_test_files.get(f, []) + ['base/gtest_assertions.cc']
+        extra = ' '.join([ 'src/' + ex for ex in extra ])
+        include = '-Isrc -Isrc/base -I{gtest}/include '.format(**locals())
+        run('{test_compiler} -g -DTESTING -std=c++14 -o {objfile} {include} src/{f} {extra} -pthread obj/libgtest.a',
             locals())
+
+        if f in test_data:
+            os.system('mkdir -p obj/%s' % os.path.dirname(test_data[f]))
+            os.system('ln -sf %s obj/%s' % (os.path.relpath('src/' + test_data[f], test_data[f]),
+                                            os.path.dirname(test_data[f])))
 
 def clean():
     os.system('rm -rf obj')

@@ -59,22 +59,9 @@ void _start() {
 
   stream.Printf("terminal: Hello from the terminal!\n");
 
-  SysRequestInterrupt(1);
-
   for (;;) {
     int sender, type, payload;
     SysReceive(&sender, &type, &payload);
-
-    unsigned char scan_code = inb(0x60);
-    if (scan_code == 0xe0) {
-      stream.Printf("terminal: escape (%x)!\n", scan_code);
-    } else if (scan_code & 0x80) {
-      stream.Printf("terminal: keyup %x\n", scan_code & 0x7f);
-    } else {
-      stream.Printf("terminal: keydown %x\n", scan_code);
-    }
-
-    SysAckInterrupt(1);
   }
 
   SysExitThread();

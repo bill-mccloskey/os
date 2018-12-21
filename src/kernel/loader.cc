@@ -14,7 +14,7 @@ public:
   ElfLoaderVisitor(const RefPtr<AddressSpace>& as) : address_space_(as) {}
 
   void LoadSegment(int flags, const char* data, size_t size, virt_addr_t load_addr, size_t load_size) override {
-    g_serial->Printf("  Would load segment (flags=%d) at %p, size=%d/%d\n", flags, (void*)load_addr, (int)size, (int)load_size);
+    g_serial->Printf("  Loading segment (flags=%d) at %p, size=%d/%d\n", flags, (void*)load_addr, (int)size, (int)load_size);
 
     assert_le(size, load_size);
 
@@ -24,13 +24,15 @@ public:
     attrs.set_no_execute(!(flags & kFlagExecute));
 
     phys_addr_t phys_start = VirtualToPhysical(reinterpret_cast<virt_addr_t>(data));
-    assert_eq(phys_start & (kPageSize - 1), 0);
-
     phys_addr_t phys_end = phys_start + size;
+
+    // Round phys_start down to page alignment. Round phys_end up to page alignment.
+    phys_start = phys_start & ~(kPageSize - 1);
     phys_end = (phys_end + kPageSize - 1) & ~(kPageSize - 1);
 
     virt_addr_t virt_start = load_addr;
     virt_addr_t virt_end = virt_start + size;
+    virt_start = virt_start & ~(kPageSize - 1);
     virt_end = (virt_end + kPageSize - 1) & ~(kPageSize - 1);
     address_space_->Map(phys_start, phys_end, virt_start, virt_end, attrs);
 
@@ -127,6 +129,8 @@ public:
   MultibootLoaderVisitor() {}
 
   void Module(const char* args, uint32_t module_start, uint32_t module_end) override {
+    g_serial->Printf("Loading module %s\n", args);
+
     RefPtr<AddressSpace> as = new AddressSpace();
 
     virt_addr_t start_addr = PhysicalToVirtual(module_start);

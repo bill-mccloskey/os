@@ -114,6 +114,12 @@ void OutputStream::Printf(const char* fmt, ...) {
           break;
         }
 
+        case 'c': {
+          int c = va_arg(args, int);
+          OutputChar(c);
+          break;
+        }
+
         default: {
           OutputChar('%');
           OutputChar(*fmt);
