@@ -2,6 +2,7 @@
 #define drivers_terminal_emulator_h
 
 #include "types.h"
+#include "vtparse.h"
 
 struct CellAttributes {
   enum Attribute {
@@ -78,27 +79,23 @@ public:
   void Input(int byte);
 
 private:
-  bool IsPrintable(int byte);
+  static void StaticParseCallback(vtparse_t* vtstate, vtparse_action_t action, unsigned char input);
+  void ParseCallback(vtparse_action_t action, int input);
 
-  void Buffer(int byte);
-  int GetBuffered();
-  int PeekBuffered();
-  void UnGetBuffered();
-  void ClearBuffer();
+  int NumParams();
+  int GetParam(int index, int deflt = 0);
 
-  int ParseDigits();
-  void ParseOperatingSystemCommand();
-  void ParseCharacterAttributes(int* args, int nargs);
-  void EraseCharacters(int count);
-  void EraseInLine(int arg);
-  void SetScrollMargins(int* args, int nargs);
-  void ParseControlSequenceIntroducer();
-
-  void ParseBuffer();
-  void ParseEscaped();
+  void SetCharacterAttributes();
+  void EraseCharacters();
+  void EraseInLine();
+  void SetScrollMargins();
 
   void ScrollBy(int delta_y);
   void ClearCells(int x, int y, int width, int height);
+
+  void ExecuteControl(int input);
+  void CSIDispatch(int input);
+  void Print(int ch);
 
   TerminalEmulatorOutput* output_;
 
@@ -108,10 +105,7 @@ private:
   int tab_stops_ = 8;
   CellAttributes current_attrs_;
 
-  static const int kBufferSize = 1024;
-  int buffer_[kBufferSize];
-  int buffer_size_ = 0;
-  int buffer_ptr_;
+  vtparse_t vtstate_;
 };
 
 #endif

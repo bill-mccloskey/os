@@ -34,6 +34,8 @@ console_files = [
     'usr/syscall.s',
     'drivers/console/framebuffer.cc',
     'drivers/console/console.cc',
+    'drivers/console/vtparse.c',
+    'drivers/console/vtparse_table.c',
     'drivers/console/emulator.cc',
 ]
 
@@ -58,14 +60,24 @@ test_data = {
 extra_test_files = {
     'kernel/allocator_test.cc': ['kernel/frame_allocator.cc'],
     'kernel/page_tables_test.cc': ['kernel/frame_allocator.cc', 'kernel/page_tables.cc'],
-    'drivers/console/emulator_test.cc': ['drivers/console/emulator.cc'],
+}
+
+extra_test_obj_files = {
+    'drivers/console/emulator_test.cc': [
+        'drivers/console/vtparse.o',
+        'drivers/console/vtparse_table.o',
+        'drivers/console/emulator.o',
+    ],
 }
 
 #compiler = 'x86_64-elf-g++'
+#c_compiler = 'x86_64-elf-gcc'
+
 compiler = 'clang++ --target=x86_64-pc-none-elf'
+c_compiler = 'clang --target=x86_64-pc-none-elf'
 
 cflags = (
-    '-std=c++14 -march=x86-64 ' +
+    '-march=x86-64 -g ' +
     '-ffreestanding  -fno-builtin -nostdlib -nostdinc++ ' +
     '-fno-stack-protector -mno-red-zone -mcmodel=large ' +
     '-mno-mmx -mno-sse -mno-sse2 -fno-rtti ' +
@@ -75,9 +87,15 @@ cflags = (
     '-Isrc/base '
 )
 
+ccflags = (
+    '-std=c++14 ' + cflags
+)
+
 #test_compiler = 'g++'
+#test_c_compiler = 'gcc'
+
 test_compiler = 'clang++'
-test_cflags = cflags
+test_c_compiler = 'clang'
 
 asflags = '-f elf64'
 ldflags = '-n -T link.ld'
@@ -92,7 +110,10 @@ def run(cmd, d):
         sys.exit(code)
 
 def build_cc(inp, out):
-    run('{compiler} {cflags} -c {inp} -o {out}', locals())
+    run('{compiler} {ccflags} -c {inp} -o {out}', locals())
+
+def build_c(inp, out):
+    run('{c_compiler} {cflags} -c {inp} -o {out}', locals())
 
 def build_asm(inp, out):
     run('nasm {asflags} {inp} -o {out}', locals())
@@ -103,6 +124,9 @@ def build_files(files):
         if f.endswith('.cc'):
             objfile = 'obj/' + f.replace('.cc', '.o')
             build_cc('src/' + f, objfile)
+        elif f.endswith('.c'):
+            objfile = 'obj/' + f.replace('.c', '.o')
+            build_c('src/' + f, objfile)
         elif f.endswith('.s'):
             objfile = 'obj/' + f.replace('.s', '.o')
             build_asm('src/' + f, objfile)
@@ -118,17 +142,12 @@ def build_kernel():
 def build_console_driver():
     obj_files = build_files(console_files)
     obj_files = ' '.join(obj_files)
-    run('{compiler} {cflags} {obj_files} -o obj/console.elf', locals())
+    run('{compiler} {ccflags} {obj_files} -o obj/console.elf', locals())
 
 def build_keyboard_driver():
     obj_files = build_files(keyboard_files)
     obj_files = ' '.join(obj_files)
-    run('{compiler} {cflags} {obj_files} -o obj/keyboard.elf', locals())
-
-#def build_test_program():
-#    run('nasm {asflags} src/syscall.s -o obj/syscall.o', locals())
-#    run('{user_compiler} {user_cflags} obj/syscall.o -Isrc src/test_program/test_program.cc -o obj/test_program.elf',
-#        locals())
+    run('{compiler} {ccflags} {obj_files} -o obj/keyboard.elf', locals())
 
 def build_iso():
     run('mkdir -p obj/iso/boot/grub', {})
@@ -168,8 +187,12 @@ def build_tests():
         objfile = 'obj/' + f.replace('.cc', '')
         extra = extra_test_files.get(f, []) + ['base/gtest_assertions.cc']
         extra = ' '.join([ 'src/' + ex for ex in extra ])
+
+        extra_obj = extra_test_obj_files.get(f, [])
+        extra_obj = ' '.join([ 'obj/' + ex for ex in extra_obj ])
+
         include = '-Isrc -Isrc/base -I{gtest}/include '.format(**locals())
-        run('{test_compiler} -g -DTESTING -std=c++14 -o {objfile} {include} src/{f} {extra} -pthread obj/libgtest.a',
+        run('{test_compiler} -g -DTESTING -std=c++14 -o {objfile} {include} src/{f} {extra} {extra_obj} -pthread obj/libgtest.a',
             locals())
 
         if f in test_data:

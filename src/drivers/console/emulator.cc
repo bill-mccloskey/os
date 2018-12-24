@@ -15,91 +15,12 @@ static const int kDEL = 127;
 TerminalEmulator::TerminalEmulator(TerminalEmulatorOutput* output)
   : output_(output),
     scroll_bottom_(output_->Height() - 1) {
+  vtparse_init(&vtstate_, &TerminalEmulator::StaticParseCallback);
+  vtstate_.user_data = this;
 }
 
-bool TerminalEmulator::IsPrintable(int byte) {
-  return byte >= 0x20 && byte <= 0x7e;
-}
-
-void TerminalEmulator::Buffer(int byte) {
-  assert(buffer_size_ < kBufferSize);
-  buffer_[buffer_size_] = byte;
-  buffer_size_++;
-}
-
-int TerminalEmulator::GetBuffered() {
-  if (buffer_ptr_ == buffer_size_) {
-    return kBufferEnd;
-  }
-  return buffer_[buffer_ptr_++];
-}
-
-int TerminalEmulator::PeekBuffered() {
-  if (buffer_ptr_ == buffer_size_) {
-    return kBufferEnd;
-  }
-  return buffer_[buffer_ptr_];
-}
-
-void TerminalEmulator::UnGetBuffered() {
-  assert_gt(buffer_ptr_, 0);
-  buffer_ptr_--;
-}
-
-void TerminalEmulator::ClearBuffer() {
-  buffer_ptr_ = 0;
-  buffer_size_ = 0;
-}
-
-int TerminalEmulator::ParseDigits() {
-  int n = 0;
-  for (;;) {
-    int ch = GetBuffered();
-    if (ch == kBufferEnd) {
-      return -1;
-    }
-
-    if (ch >= '0' && ch <= '9') {
-      n = n * 10 + (ch - '0');
-    } else {
-      UnGetBuffered();
-      return n;
-    }
-  }
-}
-
-void TerminalEmulator::ParseOperatingSystemCommand() {
-  int arg = ParseDigits();
-  if (arg == -1) return;
-
-  int ch = GetBuffered();
-  if (ch == kBufferEnd) {
-    return;
-  } else if (ch != ';') {
-    // FIXME: Is this the right thing to do?
-    ClearBuffer();
-    return;
-  }
-
-  // Change icon name and window title
-  if (arg == 0) {
-    for (;;) {
-      ch = GetBuffered();
-      if (ch == kBEL) {
-        ClearBuffer();
-        return;
-      } else if (ch == kBufferEnd) {
-        return;
-      }
-    }
-  } else {
-    ClearBuffer();
-    return;
-  }
-}
-
-void TerminalEmulator::ParseCharacterAttributes(int* args, int nargs) {
-  if (nargs == 0) {
+void TerminalEmulator::SetCharacterAttributes() {
+  if (NumParams() == 0) {
     current_attrs_.Reset();
     return;
   }
@@ -116,43 +37,47 @@ void TerminalEmulator::ParseCharacterAttributes(int* args, int nargs) {
     CellAttributes::kDefault
   };
 
-  for (int i = 0; i < nargs; i++) {
-    if (args[i] == 0) {
+  for (int i = 0; i < NumParams(); i++) {
+    int arg = GetParam(i);
+
+    if (arg == 0) {
       current_attrs_ = CellAttributes();
-    } else if (args[i] == 1) {
+    } else if (arg == 1) {
       current_attrs_.SetAttribute(CellAttributes::kBold);
       current_attrs_.ClearAttribute(CellAttributes::kFaint);
-    } else if (args[i] == 2) {
+    } else if (arg == 2) {
       current_attrs_.ClearAttribute(CellAttributes::kBold);
       current_attrs_.SetAttribute(CellAttributes::kFaint);
-    } else if (args[i] >= 3 && args[i] <= 9) {
+    } else if (arg >= 3 && arg <= 9) {
       CellAttributes::Attribute attrs[] = {
         CellAttributes::kItalic, CellAttributes::kUnderline,
         CellAttributes::kBlink, static_cast<CellAttributes::Attribute>(0), CellAttributes::kInverse,
         CellAttributes::kInvisible, CellAttributes::kCrossOut
       };
-      current_attrs_.SetAttribute(attrs[args[i] - 3]);
-    } else if (args[i] == 21) {
+      current_attrs_.SetAttribute(attrs[arg - 3]);
+    } else if (arg == 21) {
       current_attrs_.SetAttribute(CellAttributes::kDoubleUnderline);
-    } else if (args[i] == 22) {
+    } else if (arg == 22) {
       current_attrs_.ClearAttribute(CellAttributes::kBold);
       current_attrs_.ClearAttribute(CellAttributes::kFaint);
-    } else if (args[i] >= 23 && args[i] <= 29) {
+    } else if (arg >= 23 && arg <= 29) {
       CellAttributes::Attribute attrs[] = {
         CellAttributes::kItalic, CellAttributes::kUnderline,
         CellAttributes::kBlink, static_cast<CellAttributes::Attribute>(0), CellAttributes::kInverse,
         CellAttributes::kInvisible, CellAttributes::kCrossOut
       };
-      current_attrs_.ClearAttribute(attrs[args[i] - 23]);
-    } else if (args[i] >= 30 && args[i] <= 39) {
-      current_attrs_.fg_color = colors[args[i] - 30];
-    } else if (args[i] >= 40 && args[i] <= 49) {
-      current_attrs_.bg_color = colors[args[i] - 40];
+      current_attrs_.ClearAttribute(attrs[arg - 23]);
+    } else if (arg >= 30 && arg <= 39) {
+      current_attrs_.fg_color = colors[arg - 30];
+    } else if (arg >= 40 && arg <= 49) {
+      current_attrs_.bg_color = colors[arg - 40];
     }
   }
 }
 
-void TerminalEmulator::EraseCharacters(int count) {
+void TerminalEmulator::EraseCharacters() {
+  int count = GetParam(0, 1);
+
   output_->MoveCells(x_, y_, x_ + count, y_, output_->Width(), 1);
 
   for (int i = 0; i < count; i++) {
@@ -160,7 +85,9 @@ void TerminalEmulator::EraseCharacters(int count) {
   }
 }
 
-void TerminalEmulator::EraseInLine(int arg) {
+void TerminalEmulator::EraseInLine() {
+  int arg = GetParam(0);
+
   int start = 0, end = 0;
   if (arg == 0) {
     start = x_;
@@ -178,100 +105,19 @@ void TerminalEmulator::EraseInLine(int arg) {
   }
 }
 
-void TerminalEmulator::SetScrollMargins(int* args, int nargs) {
-  if (nargs == 0) {
+void TerminalEmulator::SetScrollMargins() {
+  if (NumParams() == 0) {
     scroll_top_ = 0;
     scroll_bottom_ = output_->Height() - 1;
-  } else if (nargs == 1) {
-    scroll_top_ = args[0] - 1;
+  } else if (NumParams() == 1) {
+    scroll_top_ = GetParam(0) - 1;
     scroll_bottom_ = output_->Height() - 1;
-  } else if (nargs == 2) {
-    scroll_top_ = args[0] - 1;
-    scroll_bottom_ = args[1] - 1;
+  } else if (NumParams() == 2) {
+    scroll_top_ = GetParam(0) - 1;
+    scroll_bottom_ = GetParam(1) - 1;
   }
 
   x_ = y_ = 0;
-}
-
-void TerminalEmulator::ParseControlSequenceIntroducer() {
-  int ch = PeekBuffered();
-  if (ch == kBufferEnd) {
-    return;
-  }
-
-  int args[8];
-  int nargs = 0;
-
-  if (ch >= '0' && ch <= '9') {
-    args[nargs++] = ParseDigits();
-    if (args[nargs - 1] == -1) return;
-
-    ch = GetBuffered();
-    while (ch == ';') {
-      assert_le(nargs, 8);
-      args[nargs++] = ParseDigits();
-      if (args[nargs - 1] == -1) return;
-
-      ch = GetBuffered();
-    }
-  } else {
-    ch = GetBuffered();
-  }
-
-  switch (ch) {
-    case 'm':
-      ParseCharacterAttributes(args, nargs);
-      break;
-
-    case 'r':
-      SetScrollMargins(args, nargs);
-      break;
-
-    case 'K':
-      EraseInLine(nargs == 0 ? 0 : args[0]);
-      break;
-
-    case 'P':
-      EraseCharacters(nargs == 0 ? 1 : args[0]);
-      break;
-
-    case kBufferEnd:
-      return;
-  }
-
-  ClearBuffer();
-}
-
-void TerminalEmulator::ParseEscaped() {
-  switch (GetBuffered()) {
-    case ']':  // OSC
-      ParseOperatingSystemCommand();
-      break;
-
-    case '[':
-      ParseControlSequenceIntroducer();
-      break;
-
-    case kBufferEnd:
-      return;
-    default:
-      return; // FIXME
-  }
-}
-
-void TerminalEmulator::ParseBuffer() {
-  buffer_ptr_ = 0;
-
-  switch (GetBuffered()) {
-    case kESC:
-      ParseEscaped();
-      break;
-
-    case kBufferEnd:
-      return;
-    default:
-      return; // FIXME
-  }
 }
 
 void TerminalEmulator::ClearCells(int x, int y, int width, int height) {
@@ -312,20 +158,8 @@ void TerminalEmulator::ScrollBy(int delta_y) {
   }
 }
 
-void TerminalEmulator::Input(int byte) {
-  if (buffer_size_) {
-    Buffer(byte);
-    ParseBuffer();
-    return;
-  }
-
-  if (IsPrintable(byte)) {
-    output_->SetCell(x_, y_, byte, current_attrs_);
-    x_++;
-    return;
-  }
-
-  switch (byte) {
+void TerminalEmulator::ExecuteControl(int input) {
+  switch (input) {
     case kBEL:
       output_->Bell();
       break;
@@ -351,13 +185,76 @@ void TerminalEmulator::Input(int byte) {
     case kCR:
       x_ = 0;
       break;
+  }
+}
 
-    case kESC:
-      Buffer(byte);
+void TerminalEmulator::CSIDispatch(int input) {
+  switch (input) {
+    case 'm':
+      SetCharacterAttributes();
       break;
 
-    case kDEL:
+    case 'r':
+      SetScrollMargins();
+      break;
+
+    case 'K':
+      EraseInLine();
+      break;
+
+    case 'P':
+      EraseCharacters();
       break;
   }
+}
+
+void TerminalEmulator::Print(int ch) {
+  output_->SetCell(x_, y_, ch, current_attrs_);
+  x_++;
+}
+
+void TerminalEmulator::StaticParseCallback(vtparse_t* vtstate, vtparse_action_t action, unsigned char input) {
+  TerminalEmulator* em = static_cast<TerminalEmulator*>(vtstate->user_data);
+  em->ParseCallback(action, input);
+}
+
+void TerminalEmulator::ParseCallback(vtparse_action_t action, int input) {
+  switch (action) {
+    case VTPARSE_ACTION_EXECUTE:
+      ExecuteControl(input);
+      break;
+
+    case VTPARSE_ACTION_CSI_DISPATCH:
+      CSIDispatch(input);
+      break;
+
+    case VTPARSE_ACTION_PRINT:
+      Print(input);
+      break;
+
+    default:
+      break;
+  }
+}
+
+int TerminalEmulator::NumParams() {
+  return vtstate_.num_params;
+}
+
+int TerminalEmulator::GetParam(int index, int deflt) {
+  if (index < vtstate_.num_params) {
+    if (vtstate_.params[index] == 0) {
+      return deflt;
+    } else {
+      return vtstate_.params[index];
+    }
+  } else {
+    return deflt;
+  }
+}
+
+void TerminalEmulator::Input(int byte) {
+  unsigned char ch = byte;
+  vtparse(&vtstate_, &ch, 1);
 }
 
