@@ -25,7 +25,7 @@ public:
   static const int kLightCyan = 11;
   static const int kLightRed = 12;
   static const int kLightMagenta = 13;
-  static const int kLightBrown = 14;
+  static const int kYellow = 14;
   static const int kWhite = 15;
 
   FrameBuffer(char* fb, IoPorts* io);
@@ -34,12 +34,14 @@ public:
 
   void MoveCursor(int x, int y);
 
+  void WriteCell(int x, int y, char c, int fg, int bg);
+  void CopyCell(int dst_x, int dst_y, int src_x, int src_y);
+
   void WriteString(const char* str, int fg, int bg);
 
   void ScrollTo(int line);
 
 private:
-  void WriteCell(int x, int y, char c, int fg, int bg);
   void WriteChar(char c, int fg, int bg);
 
   char* fb_;

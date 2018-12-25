@@ -39,6 +39,10 @@ struct CellAttributes {
     return *this;
   }
 
+  bool HasAttribute(Attribute attr) const {
+    return attributes & attr;
+  }
+
   void Reset() {
     fg_color = kDefault;
     bg_color = kDefault;

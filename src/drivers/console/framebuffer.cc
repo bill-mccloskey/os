@@ -1,4 +1,5 @@
 #include "framebuffer.h"
+#include "assertions.h"
 
 #include "io.h"
 
@@ -42,12 +43,20 @@ void FrameBuffer::MoveCursor(int x, int y) {
 }
 
 void FrameBuffer::WriteCell(int x, int y, char c, int fg, int bg) {
-  //assert_le(bg, kMaxBackgroundColor);
+  assert_le(bg, kMaxBackgroundColor);
 
   int pos = y * kWidth * 2 + x * 2;
 
   fb_[pos] = c;
   fb_[pos + 1] = ((bg & 0x0f) << 4) | (fg & 0x0f);
+}
+
+void FrameBuffer::CopyCell(int dst_x, int dst_y, int src_x, int src_y) {
+  int src_pos = src_y * kWidth * 2 + src_x * 2;
+  int dst_pos = dst_y * kWidth * 2 + dst_x * 2;
+
+  fb_[dst_pos] = fb_[src_pos];
+  fb_[dst_pos + 1] = fb_[src_pos + 1];
 }
 
 void FrameBuffer::WriteChar(char c, int fg, int bg) {
