@@ -1,3 +1,5 @@
+// FIXME: Wrapping. Also, vertical wrapping (how does that work?).
+
 #include "emulator.h"
 #include "assertions.h"
 
@@ -105,6 +107,37 @@ void TerminalEmulator::EraseInLine() {
   }
 }
 
+void TerminalEmulator::EraseInDisplay() {
+  int arg = GetParam(0);
+
+  if (arg == 0) {
+    // Erase below.
+    ClearCells(0, y_ + 1, output_->Width(), output_->Height() - y_ - 1);
+  } else if (arg == 1) {
+    // Erase above.
+    ClearCells(0, 0, output_->Width(), y_ + 1);
+  } else if (arg == 2) {
+    // Erase all.
+    ClearCells(0, 0, output_->Width(), output_->Height());
+  }
+}
+
+void TerminalEmulator::SetCursorPosition() {
+  int y = GetParam(0, 1) - 1;
+  int x = GetParam(1, 1) - 1;
+
+  x_ = x;
+  y_ = y;
+  SnapCursor();
+}
+
+void TerminalEmulator::CursorMove(int delta_x, int delta_y) {
+  x_ += delta_x;
+  y_ += delta_y;
+
+  SnapCursor();
+}
+
 void TerminalEmulator::SetScrollMargins() {
   if (NumParams() == 0) {
     scroll_top_ = 0;
@@ -118,14 +151,23 @@ void TerminalEmulator::SetScrollMargins() {
   }
 
   x_ = y_ = 0;
+  SnapCursor();
 }
 
-void TerminalEmulator::ClearCells(int x, int y, int width, int height) {
-  for (int py = y; py < y + height; py++) {
-    for (int px = x; px < x + width; px++) {
-      output_->SetCell(px, py, ' ', current_attrs_);
-    }
-  }
+int TerminalEmulator::LimitTop() {
+  return 0;
+}
+
+int TerminalEmulator::LimitBottom() {
+  return output_->Height() - 1;
+}
+
+void TerminalEmulator::SnapCursor() {
+  if (x_ < 0) x_ = 0;
+  if (x_ >= output_->Width()) x_ = output_->Width();
+
+  if (y_ < LimitTop()) y_ = LimitTop();
+  if (y_ > LimitBottom()) y_ = LimitBottom();
 }
 
 // A delta_y that is positive means we're scrolling up.
@@ -155,6 +197,24 @@ void TerminalEmulator::ScrollBy(int delta_y) {
   } else {
     output_->MoveCells(0, scroll_top_ + scroll_size, 0, scroll_top_, output_->Width(), move_size);
     ClearCells(0, scroll_top_, output_->Width(), scroll_size);
+  }
+}
+
+void TerminalEmulator::ClearCells(int x, int y, int width, int height) {
+  for (int py = y; py < y + height; py++) {
+    for (int px = x; px < x + width; px++) {
+      output_->SetCell(px, py, ' ', current_attrs_);
+    }
+  }
+}
+
+void TerminalEmulator::DECPrivateModeSet() {
+  int arg = GetParam(0);
+  switch (arg) {
+    case 1049:
+      //SaveCursor();
+      //AlternateScreenBuffer();
+      break;
   }
 }
 
@@ -190,12 +250,42 @@ void TerminalEmulator::ExecuteControl(int input) {
 
 void TerminalEmulator::CSIDispatch(int input) {
   switch (input) {
+    case 'h':
+      if (GetIntermediateChar(0) == '?') {
+        DECPrivateModeSet();
+      }
+      break;
+
     case 'm':
       SetCharacterAttributes();
       break;
 
     case 'r':
       SetScrollMargins();
+      break;
+
+    case 'A':
+      CursorMove(0, -GetParam(0, 1));
+      break;
+
+    case 'B':
+      CursorMove(0, GetParam(0, 1));
+      break;
+
+    case 'C':
+      CursorMove(GetParam(0, 1), 0);
+      break;
+
+    case 'D':
+      CursorMove(-GetParam(0, 1), 0);
+      break;
+
+    case 'H':
+      SetCursorPosition();
+      break;
+
+    case 'J':
+      EraseInDisplay();
       break;
 
     case 'K':
@@ -205,12 +295,26 @@ void TerminalEmulator::CSIDispatch(int input) {
     case 'P':
       EraseCharacters();
       break;
+
+    case 'S':
+      ScrollBy(GetParam(0, 1));
+      break;
+
+    case 'T':
+      ScrollBy(-GetParam(0, 1));
+      break;
+
+    default:
+      assert(false);
+      break;
   }
 }
 
 void TerminalEmulator::Print(int ch) {
   output_->SetCell(x_, y_, ch, current_attrs_);
-  x_++;
+  if (x_ < output_->Width() - 1) {
+    x_++;
+  }
 }
 
 void TerminalEmulator::StaticParseCallback(vtparse_t* vtstate, vtparse_action_t action, unsigned char input) {
@@ -253,8 +357,19 @@ int TerminalEmulator::GetParam(int index, int deflt) {
   }
 }
 
+char TerminalEmulator::GetIntermediateChar(int index) {
+  if (index >= vtstate_.num_intermediate_chars) {
+    return 0;
+  }
+  return vtstate_.intermediate_chars[index];
+}
+
 void TerminalEmulator::Input(int byte) {
   unsigned char ch = byte;
   vtparse(&vtstate_, &ch, 1);
 }
 
+void TerminalEmulator::GetCursorPosition(int* x, int* y) {
+  *x = x_;
+  *y = y_;
+}

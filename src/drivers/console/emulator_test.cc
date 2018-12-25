@@ -47,8 +47,8 @@ public:
   int Width() override { return kWidth; }
   int Height() override { return kHeight; }
 
-  static const int kHeight = 5;
-  static const int kWidth = 10;
+  static const int kHeight = 70;
+  static const int kWidth = 118;
 
   Cell cells[kHeight][kWidth];
 };
@@ -96,6 +96,18 @@ protected:
     }
   }
 
+  int GetCursorX() {
+    int x, y;
+    em.GetCursorPosition(&x, &y);
+    return x;
+  }
+
+  int GetCursorY() {
+    int x, y;
+    em.GetCursorPosition(&x, &y);
+    return y;
+  }
+
   TestEmulatorOutput out;
   TerminalEmulator em;
 };
@@ -124,6 +136,21 @@ TEST_F(EmulatorTest, Basic) {
   for (int i = 0; i < TestEmulatorOutput::kHeight; i++) {
     for (int j = 0; j < TestEmulatorOutput::kWidth; j++) {
       printf("[%c] ", out.cells[i][j].contents);
+    }
+    printf("\n");
+  }
+}
+
+TEST_F(EmulatorTest, Alpine) {
+  std::string data = ReadTestData("alpine");
+
+  for (char c : data) {
+    em.Input(c);
+  }
+
+  for (int i = 0; i < TestEmulatorOutput::kHeight; i++) {
+    for (int j = 0; j < TestEmulatorOutput::kWidth; j++) {
+      printf("%c", out.cells[i][j].contents);
     }
     printf("\n");
   }
@@ -305,6 +332,167 @@ TEST_F(EmulatorTest, EraseInLineTest2) {
   EXPECT_EQ(out.GetAttrs(2, 0), attrs);
   EXPECT_EQ(out.GetAttrs(TestEmulatorOutput::kWidth - 1, 0), attrs);
 }
+
+TEST_F(EmulatorTest, EraseInDisplayTest1) {
+  InputString("a\r\nb\r\nc\e[A\e[0J");
+
+  EXPECT_EQ(out.GetCell(0, 0), 'a');
+  EXPECT_EQ(out.GetCell(0, 1), 'b');
+  EXPECT_EQ(out.GetCell(0, 2), ' ');
+}
+
+TEST_F(EmulatorTest, EraseInDisplayTest2) {
+  InputString("a\r\nb\r\nc\e[A\e[1J");
+
+  EXPECT_EQ(out.GetCell(0, 0), ' ');
+  EXPECT_EQ(out.GetCell(0, 1), ' ');
+  EXPECT_EQ(out.GetCell(0, 2), 'c');
+}
+
+TEST_F(EmulatorTest, EraseInDisplayTest3) {
+  InputString("a\r\nb\r\nc\e[A\e[2J");
+
+  EXPECT_EQ(out.GetCell(0, 0), ' ');
+  EXPECT_EQ(out.GetCell(0, 1), ' ');
+  EXPECT_EQ(out.GetCell(0, 2), ' ');
+}
+
+TEST_F(EmulatorTest, CursorUpTest1) {
+  InputString("a\r\nb\r\nc\b\e[Ad");
+
+  EXPECT_EQ(out.GetCell(0, 0), 'a');
+  EXPECT_EQ(out.GetCell(0, 1), 'd');
+  EXPECT_EQ(out.GetCell(0, 2), 'c');
+
+  EXPECT_EQ(GetCursorX(), 1);
+  EXPECT_EQ(GetCursorY(), 1);
+}
+
+TEST_F(EmulatorTest, CursorUpTest2) {
+  InputString("a\r\nb\r\nc\b\e[0Ad");
+
+  EXPECT_EQ(out.GetCell(0, 0), 'a');
+  EXPECT_EQ(out.GetCell(0, 1), 'd');
+  EXPECT_EQ(out.GetCell(0, 2), 'c');
+
+  EXPECT_EQ(GetCursorX(), 1);
+  EXPECT_EQ(GetCursorY(), 1);
+}
+
+TEST_F(EmulatorTest, CursorUpTest3) {
+  InputString("a\r\nb\r\nc\b\e[2Ad");
+
+  EXPECT_EQ(out.GetCell(0, 0), 'd');
+  EXPECT_EQ(out.GetCell(0, 1), 'b');
+  EXPECT_EQ(out.GetCell(0, 2), 'c');
+
+  EXPECT_EQ(GetCursorX(), 1);
+  EXPECT_EQ(GetCursorY(), 0);
+}
+
+TEST_F(EmulatorTest, CursorDownTest1) {
+  InputString("a\r\n\e[Bb");
+
+  EXPECT_EQ(out.GetCell(0, 0), 'a');
+  EXPECT_EQ(out.GetCell(0, 1), ' ');
+  EXPECT_EQ(out.GetCell(0, 2), 'b');
+
+  EXPECT_EQ(GetCursorX(), 1);
+  EXPECT_EQ(GetCursorY(), 2);
+}
+
+TEST_F(EmulatorTest, CursorDownTest2) {
+  InputString("a\r\n\e[0Bb");
+
+  EXPECT_EQ(out.GetCell(0, 0), 'a');
+  EXPECT_EQ(out.GetCell(0, 1), ' ');
+  EXPECT_EQ(out.GetCell(0, 2), 'b');
+
+  EXPECT_EQ(GetCursorX(), 1);
+  EXPECT_EQ(GetCursorY(), 2);
+}
+
+TEST_F(EmulatorTest, CursorDownTest3) {
+  InputString("a\r\n\e[2Bb");
+
+  EXPECT_EQ(out.GetCell(0, 0), 'a');
+  EXPECT_EQ(out.GetCell(0, 1), ' ');
+  EXPECT_EQ(out.GetCell(0, 2), ' ');
+  EXPECT_EQ(out.GetCell(0, 3), 'b');
+
+  EXPECT_EQ(GetCursorX(), 1);
+  EXPECT_EQ(GetCursorY(), 3);
+}
+
+TEST_F(EmulatorTest, CursorLeftTest1) {
+  InputString("abc\e[Dd");
+
+  EXPECT_EQ(out.GetCell(0, 0), 'a');
+  EXPECT_EQ(out.GetCell(1, 0), 'b');
+  EXPECT_EQ(out.GetCell(2, 0), 'd');
+
+  EXPECT_EQ(GetCursorX(), 3);
+  EXPECT_EQ(GetCursorY(), 0);
+}
+
+TEST_F(EmulatorTest, CursorLeftTest2) {
+  InputString("abc\e[0Dd");
+
+  EXPECT_EQ(out.GetCell(0, 0), 'a');
+  EXPECT_EQ(out.GetCell(1, 0), 'b');
+  EXPECT_EQ(out.GetCell(2, 0), 'd');
+
+  EXPECT_EQ(GetCursorX(), 3);
+  EXPECT_EQ(GetCursorY(), 0);
+}
+
+TEST_F(EmulatorTest, CursorLeftTest3) {
+  InputString("abc\e[2Dd");
+
+  EXPECT_EQ(out.GetCell(0, 0), 'a');
+  EXPECT_EQ(out.GetCell(1, 0), 'd');
+  EXPECT_EQ(out.GetCell(2, 0), 'c');
+
+  EXPECT_EQ(GetCursorX(), 2);
+  EXPECT_EQ(GetCursorY(), 0);
+}
+
+TEST_F(EmulatorTest, CursorRightTest1) {
+  InputString("abc\b\b\b\e[Cd");
+
+  EXPECT_EQ(out.GetCell(0, 0), 'a');
+  EXPECT_EQ(out.GetCell(1, 0), 'd');
+  EXPECT_EQ(out.GetCell(2, 0), 'c');
+
+  EXPECT_EQ(GetCursorX(), 2);
+  EXPECT_EQ(GetCursorY(), 0);
+}
+
+TEST_F(EmulatorTest, CursorRightTest2) {
+  InputString("abc\b\b\b\e[0Cd");
+
+  EXPECT_EQ(out.GetCell(0, 0), 'a');
+  EXPECT_EQ(out.GetCell(1, 0), 'd');
+  EXPECT_EQ(out.GetCell(2, 0), 'c');
+
+  EXPECT_EQ(GetCursorX(), 2);
+  EXPECT_EQ(GetCursorY(), 0);
+}
+
+TEST_F(EmulatorTest, CursorRightTest3) {
+  InputString("abc\b\b\b\e[2Cd");
+
+  EXPECT_EQ(out.GetCell(0, 0), 'a');
+  EXPECT_EQ(out.GetCell(1, 0), 'b');
+  EXPECT_EQ(out.GetCell(2, 0), 'd');
+
+  EXPECT_EQ(GetCursorX(), 3);
+  EXPECT_EQ(GetCursorY(), 0);
+}
+
+// FIXME: Need a test for wrapping.
+// Then I also want to test how wrapping behaves with cursor movement commands (cursor left, cursor right, etc.)
+// Should also have a test for how cursor up/down behave with scrolling.
 
 int main(int argc, char** argv) {
   std::string path = argv[0];

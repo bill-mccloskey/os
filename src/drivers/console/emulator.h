@@ -78,20 +78,34 @@ public:
 
   void Input(int byte);
 
+  void GetCursorPosition(int* x, int* y);
+
 private:
   static void StaticParseCallback(vtparse_t* vtstate, vtparse_action_t action, unsigned char input);
   void ParseCallback(vtparse_action_t action, int input);
 
   int NumParams();
   int GetParam(int index, int deflt = 0);
+  char GetIntermediateChar(int index);
 
   void SetCharacterAttributes();
+
   void EraseCharacters();
   void EraseInLine();
-  void SetScrollMargins();
+  void EraseInDisplay();
 
+  void SetCursorPosition();
+  void CursorMove(int delta_x, int delta_y);
+
+  void SetScrollMargins();
+  int LimitTop();
+  int LimitBottom();
+  void SnapCursor();
   void ScrollBy(int delta_y);
+
   void ClearCells(int x, int y, int width, int height);
+
+  void DECPrivateModeSet();
 
   void ExecuteControl(int input);
   void CSIDispatch(int input);
