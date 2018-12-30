@@ -25,6 +25,9 @@ Thread::Thread(virt_addr_t start_func,
   state_.rflags = (1 << 9); // Enable interrupts.
   state_.rsp = stack_ptr;
   state_.ss = SegmentSelector(kUserStackSegmentIndex, kUserPrivilege).Serialize();
+
+  // This allows us to pass in thread data as an argument.
+  state_.rdi = stack_ptr;
 }
 
 Thread::~Thread() {

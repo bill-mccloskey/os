@@ -45,12 +45,15 @@ int%1_handler:
 
 ; This code is called at boot time to start scheduling.
 ; On function entry, rdi contains the ThreadState for the thread to start.
+; We restore rdi from the ThreadState so we can pass an argument to
+; thread startup.
 SchedulerStart:
   push qword[rdi + ts_ss]
   push qword[rdi + ts_rsp]
   push qword[rdi + ts_rflags]
   push qword[rdi + ts_cs]
   push qword[rdi + ts_rip]
+  mov rdi, qword[rdi + ts_rdi]
   iretq
 
 SwitchAddressSpace:

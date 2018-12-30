@@ -5,21 +5,39 @@
 
 FrameAllocator* g_frame_allocator;
 
+static phys_addr_t RoundUp(phys_addr_t addr) {
+  return (addr + kPageSize - 1) & ~(kPageSize - 1);
+}
+
+static phys_addr_t RoundDown(phys_addr_t addr) {
+  return addr & ~(kPageSize - 1);
+}
+
+FrameAllocator::FrameAllocator(phys_addr_t kernel_start_addr, phys_addr_t kernel_end_addr,
+                               phys_addr_t module_start_addr, phys_addr_t module_end_addr)
+  : kernel_start_addr_(RoundDown(kernel_start_addr)),
+    kernel_end_addr_(RoundUp(kernel_end_addr)),
+    module_start_addr_(RoundDown(module_start_addr)),
+    module_end_addr_(RoundUp(module_end_addr)) {}
+
 void FrameAllocator::AddRegion(phys_addr_t start_addr, phys_addr_t end_addr) {
+  start_addr = RoundUp(start_addr);
+  end_addr = RoundDown(end_addr);
+
   assert_eq(start_addr & (kPageSize - 1), 0);
   assert_eq(end_addr & (kPageSize - 1), 0);
-
-  if (start_addr >= end_addr) return;
 
   // It's not a good idea to treat 0 as an allocated page.
   if (start_addr == 0) {
     start_addr += kPageSize;
-    if (start_addr >= end_addr) return;
   }
 
   if (start_addr >= kernel_start_addr_ && start_addr < kernel_end_addr_) {
     start_addr = kernel_end_addr_;
-    if (start_addr >= end_addr) return;
+  }
+
+  if (end_addr >= kernel_start_addr_ && end_addr < kernel_end_addr_) {
+    end_addr = kernel_start_addr_;
   }
 
   if (kernel_start_addr_ >= start_addr && kernel_start_addr_ < end_addr) {
@@ -27,6 +45,22 @@ void FrameAllocator::AddRegion(phys_addr_t start_addr, phys_addr_t end_addr) {
     AddRegion(kernel_end_addr_, end_addr);
     return;
   }
+
+  if (start_addr >= module_start_addr_ && start_addr < module_end_addr_) {
+    start_addr = module_end_addr_;
+  }
+
+  if (end_addr >= module_start_addr_ && end_addr < module_end_addr_) {
+    end_addr = module_start_addr_;
+  }
+
+  if (module_start_addr_ >= start_addr && module_start_addr_ < end_addr) {
+    AddRegion(start_addr, module_start_addr_);
+    AddRegion(module_end_addr_, end_addr);
+    return;
+  }
+
+  if (start_addr >= end_addr) return;
 
   regions_[num_regions_].start_addr = start_addr;
   regions_[num_regions_].end_addr = end_addr;

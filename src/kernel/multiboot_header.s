@@ -8,6 +8,14 @@ header_start:
 
   ; insert optional multiboot tags here
 
+  dw 5                          ; Framebuffer tag
+  dw 0                          ; Flags
+  dd 20                         ; Size
+  dd 800                        ; Width
+  dd 600                        ; Height
+  dd 32                         ; Bits per pixel
+  dd 0                          ; Padding
+
   dw 6                          ; Module alignment tag
   dw 0                          ; Flags
   dd 8                          ; Size

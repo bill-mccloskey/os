@@ -19,6 +19,11 @@ public:
   virtual void StartMemoryMap() {}
   virtual void MemoryMapEntry(uint64_t base_addr, uint64_t length, MemoryMapEntryType type) {}
   virtual void EndMemoryMap() {}
+
+  virtual void Framebuffer(uint64_t addr, uint32_t pitch, uint32_t width, uint32_t height, uint8_t bpp) {}
+  virtual void FramebufferRGBInfo(uint8_t red_field_position, uint8_t red_mask,
+                                  uint8_t green_field_position, uint8_t green_mask,
+                                  uint8_t blue_field_position, uint8_t blue_mask) {}
 };
 
 class MultibootReader {

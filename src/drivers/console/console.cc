@@ -1,21 +1,11 @@
 #include "assertions.h"
-#include "framebuffer.h"
+#include "raster_frame_buffer.h"
+#include "text_frame_buffer.h"
 #include "emulator.h"
 #include "io.h"
+#include "kernel_module.h"
 #include "output_stream.h"
-
-extern "C" {
-void SysWriteByte(char c);
-void SysReschedule();
-void SysExitThread();
-
-void SysSend(int dest_tid, int type, int payload);
-void SysReceive(int* sender_tid, int* type, int* payload);
-void SysNotify(int notify_tid);
-
-void SysRequestInterrupt(int irq);
-void SysAckInterrupt(int irq);
-}
+#include "system.h"
 
 class DebugOutputStream : public OutputStream {
 public:
@@ -43,40 +33,40 @@ public:
 
 class ConsoleEmulatorOutput : public TerminalEmulatorOutput {
 public:
-  ConsoleEmulatorOutput(FrameBuffer* fb) : fb_(fb) {}
+  ConsoleEmulatorOutput(AbstractFrameBuffer* fb) : fb_(fb) {}
 
-  int SelectFrameBufferColor(CellAttributes::Color color, bool is_fg, bool inverse) {
+  AbstractFrameBuffer::Color SelectFrameBufferColor(CellAttributes::Color color, bool is_fg, bool inverse) {
     switch (color) {
       case CellAttributes::kBlack:
-        return inverse ? (is_fg ? FrameBuffer::kWhite : FrameBuffer::kLightGray) : FrameBuffer::kBlack;
+        return inverse ? AbstractFrameBuffer::kWhite : AbstractFrameBuffer::kBlack;
         break;
 
       case CellAttributes::kRed:
-        return FrameBuffer::kRed;
+        return AbstractFrameBuffer::kRed;
         break;
 
       case CellAttributes::kGreen:
-        return FrameBuffer::kGreen;
+        return AbstractFrameBuffer::kGreen;
         break;
 
       case CellAttributes::kYellow:
-        return is_fg ? FrameBuffer::kYellow : FrameBuffer::kBrown;
+        return TextFrameBuffer::kYellow;
         break;
 
       case CellAttributes::kBlue:
-        return FrameBuffer::kBlue;
+        return TextFrameBuffer::kBlue;
         break;
 
       case CellAttributes::kMagenta:
-        return FrameBuffer::kMagenta;
+        return TextFrameBuffer::kMagenta;
         break;
 
       case CellAttributes::kCyan:
-        return FrameBuffer::kCyan;
+        return TextFrameBuffer::kCyan;
         break;
 
       case CellAttributes::kWhite:
-        return inverse ? FrameBuffer::kBlack : (is_fg ? FrameBuffer::kWhite : FrameBuffer::kLightGray);
+        return inverse ? TextFrameBuffer::kBlack : TextFrameBuffer::kWhite;
         break;
 
       case CellAttributes::kDefault:
@@ -89,7 +79,7 @@ public:
     assert_ge(x, 0);
     assert_ge(y, 0);
 
-    if (x < FrameBuffer::kWidth && y < FrameBuffer::kHeight) {
+    if (x < fb_->Width() && y < fb_->Height()) {
       fb_->WriteCell(x, y, ch,
                      SelectFrameBufferColor(attrs.fg_color, true, attrs.HasAttribute(CellAttributes::kInverse)),
                      SelectFrameBufferColor(attrs.bg_color, false, attrs.HasAttribute(CellAttributes::kInverse)));
@@ -130,35 +120,40 @@ public:
 
   void CopyToScrollback(int src_y, int y_count) override {}
 
-  int Width() override { return FrameBuffer::kWidth; }
-  int Height() override { return FrameBuffer::kHeight; }
+  int Width() override { return fb_->Width(); }
+  int Height() override { return fb_->Height(); }
 
 private:
-  FrameBuffer* fb_;
+  AbstractFrameBuffer* fb_;
 };
 
 extern "C" {
-void _start() {
-  IoPorts io;
-  FrameBuffer fb((char*)0xb8000, &io);
-
-  fb.Clear();
-
+void _start(KernelModuleData* module_data) {
   DebugOutputStream stream;
 
   stream.Printf("terminal: Hello from the terminal!\n");
+  stream.Printf("terminal: framebuffer is %u x %u\n", module_data->framebuffer.width, module_data->framebuffer.height);
+
+  //IoPorts io;
+  //TextFrameBuffer fb((char*)0xb8000, &io);
+  RasterFrameBuffer fb(&module_data->framebuffer, RasterFrameBuffer::VGA);
+
+  //fb.Clear();
 
   ConsoleEmulatorOutput out(&fb);
   TerminalEmulator em(&out);
 
-  const char* input = "Welcome to \e[32mCalic\e[33mOS\e[m!";
+  const char* input = "Welcome to \e[32mCalic\e[33mOS\e[m! Please start typing.\r\n";
   for (int i = 0; input[i]; i++) {
     em.Input(input[i]);
   }
 
   for (;;) {
-    int sender, type, payload;
+    int sender, type;
+    uint64_t payload;
     SysReceive(&sender, &type, &payload);
+
+    em.Input(payload);
   }
 
   SysExitThread();

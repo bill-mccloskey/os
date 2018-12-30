@@ -31,8 +31,11 @@ console_files = [
     'base/io.cc',
     'base/output_stream.cc',
     'base/driver_assertions.cc',
+    'builtins/string.cc',
     'usr/syscall.s',
-    'drivers/console/framebuffer.cc',
+    'drivers/console/abstract_frame_buffer.cc',
+    'drivers/console/raster_frame_buffer.cc',
+    'drivers/console/text_frame_buffer.cc',
     'drivers/console/console.cc',
     'drivers/console/vtparse.c',
     'drivers/console/vtparse_table.c',
@@ -44,6 +47,12 @@ keyboard_files = [
     'base/output_stream.cc',
     'usr/syscall.s',
     'drivers/keyboard/keyboard.cc',
+]
+
+test_program_files = [
+    'base/output_stream.cc',
+    'usr/syscall.s',
+    'test_program/test_program.cc',
 ]
 
 test_files = [
@@ -84,7 +93,7 @@ cflags = (
     '-fomit-frame-pointer -fno-exceptions -fno-asynchronous-unwind-tables -fno-unwind-tables ' +
     '-Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-const-variable -Wno-missing-field-initializers ' +
     '-isystem src/builtins ' +
-    '-Isrc/base '
+    '-Isrc/base -Isrc/usr -Iobj '
 )
 
 ccflags = (
@@ -140,6 +149,9 @@ def build_kernel():
     run('ld {ldflags} {obj_files} -o obj/kernel.elf', locals())
 
 def build_console_driver():
+    run('cd src/drivers/console; xxd -i Lat15-Fixed16.psf > ../../../obj/drivers/console/Lat15-Fixed16.h', locals())
+    run('cd src/drivers/console; xxd -i Lat15-VGA16.psf > ../../../obj/drivers/console/Lat15-VGA16.h', locals())
+
     obj_files = build_files(console_files)
     obj_files = ' '.join(obj_files)
     run('{compiler} {ccflags} {obj_files} -o obj/console.elf', locals())
@@ -149,13 +161,18 @@ def build_keyboard_driver():
     obj_files = ' '.join(obj_files)
     run('{compiler} {ccflags} {obj_files} -o obj/keyboard.elf', locals())
 
+def build_test_program():
+    obj_files = build_files(test_program_files)
+    obj_files = ' '.join(obj_files)
+    run('{compiler} {ccflags} {obj_files} -o obj/test_program.elf', locals())
+
 def build_iso():
     run('mkdir -p obj/iso/boot/grub', {})
     run('mkdir -p obj/iso/modules', {})
     run('cp obj/kernel.elf obj/iso/boot', {})
     run('cp obj/console.elf obj/iso/modules', {})
     run('cp obj/keyboard.elf obj/iso/modules', {})
-    #run('cp obj/test_program.elf obj/iso/modules', {})
+    run('cp obj/test_program.elf obj/iso/modules', {})
     run('cp grub.cfg obj/iso/boot/grub', {})
     run('grub-mkrescue /usr/lib/grub/i386-pc -o obj/os.iso obj/iso', {})
     run('rm -r obj/iso', {})
@@ -167,10 +184,11 @@ def build():
     os.system('mkdir -p obj/usr')
     os.system('mkdir -p obj/drivers/console')
     os.system('mkdir -p obj/drivers/keyboard')
+    os.system('mkdir -p obj/test_program')
     os.system('mkdir -p obj/builtins')
 
     build_kernel()
-    #build_test_program()
+    build_test_program()
     build_console_driver()
     build_keyboard_driver()
     build_iso()
@@ -207,8 +225,8 @@ def run_bochs():
     os.system('bochs -f bochsrc.txt -q')
 
 def run_qemu():
-    os.system('qemu-system-x86_64 -cdrom build/os.iso -serial mon:stdio ' +
-	      '-device isa-debug-exit,iobase=0xf4,iosize=0x01')
+    os.system('qemu-system-x86_64 -cdrom obj/os.iso -serial mon:stdio ' +
+              '-device isa-debug-exit,iobase=0xf4,iosize=0x01')
 
 if sys.argv[1] == 'clean':
     clean()

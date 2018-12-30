@@ -12,7 +12,8 @@ class AddressSpace : public RefCounted {
 public:
   AddressSpace();
 
-  Thread* CreateThread(virt_addr_t start_func, int priority);
+  Thread* CreateThread(virt_addr_t start_func, int priority,
+                       void* stack_data = nullptr, size_t stack_data_len = 0);
 
   phys_addr_t table_root() const { return page_tables_.table_root(); }
 

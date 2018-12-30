@@ -1,19 +1,8 @@
 #include "io.h"
+#include "keyboard.h"
 #include "output_stream.h"
+#include "system.h"
 #include "types.h"
-
-extern "C" {
-void SysWriteByte(char c);
-void SysReschedule();
-void SysExitThread();
-
-void SysSend(int dest_tid, int type, uint64_t payload);
-void SysReceive(int* sender_tid, int* type, uint64_t* payload);
-void SysNotify(int notify_tid);
-
-void SysRequestInterrupt(int irq);
-void SysAckInterrupt(int irq);
-}
 
 class DebugOutputStream : public OutputStream {
 public:
@@ -22,77 +11,19 @@ public:
   }
 };
 
+class ConsoleOutputStream : public OutputStream {
+public:
+  void OutputChar(char c) override {
+    SysSend(1, 0, c);
+  }
+};
+
 static const int kMsgReadReply = 7387;
-
-enum KeyType {
-  kTypeNone,
-  kTypeError,
-  kTypeNumber,
-  kTypeLetter,
-  kTypeSymbol,
-  kTypeKeypad,
-  kTypeFunction,
-  kTypeNamedKey,
-};
-
-enum KeyName {
-  kKeyNone,
-
-  kKeyEscape,
-  kKeyBackspace,
-  kKeyTab,
-  kKeyEnter,
-  kKeyControl,
-  kKeyShift,
-  kKeyFakeShift,
-  kKeyAlt,
-  kKeySpace,
-  kKeyCapsLock,
-  kKeyNumLock,
-  kKeyScrollLock,
-  kKeyMeta,
-
-  kKeyPrintScreen,
-  kKeyBreak,
-
-  kKeyHome,
-  kKeyUp,
-  kKeyPageUp,
-  kKeyLeft,
-  kKeyRight,
-  kKeyEnd,
-  kKeyDown,
-  kKeyPageDown,
-  kKeyInsert,
-  kKeyDelete,
-};
-
-enum KeySide {
-  kNoSide, kLeft, kRight,
-};
-
-struct KeyInfo {
-  KeyType type;
-  int data;
-  KeySide side;
-};
 
 struct ScanCodeInfo {
   KeyInfo unshifted;
   KeyInfo shifted;
   KeyInfo escaped;
-};
-
-enum Modifiers {
-  kModShift = 1 << 0,
-  kModControl = 1 << 1,
-  kModAlt = 1 << 2,
-  kModMeta = 1 << 3,
-};
-
-struct OutputKey {
-  KeyInfo key;
-  int modifiers;
 };
 
 #define SINGLE_KEY(type, data) { type, data }, { type, data }
@@ -114,8 +45,8 @@ ScanCodeInfo g_scancodes[] = {
   { SHIFTED_KEY(kTypeNumber, '0', ')') }, /* b */
   { SHIFTED_KEY(kTypeSymbol, '-', '_') }, /* c */
   { SHIFTED_KEY(kTypeSymbol, '=', '+') }, /* d */
-  { SINGLE_KEY(kTypeNumber, kKeyBackspace) }, /* e */
-  { SINGLE_KEY(kTypeNumber, kKeyTab) }, /* f */
+  { SINGLE_KEY(kTypeNamedKey, kKeyBackspace) }, /* e */
+  { SINGLE_KEY(kTypeNamedKey, kKeyTab) }, /* f */
   { SHIFTED_KEY(kTypeLetter, 'q', 'Q') }, /* 10 */
   { SHIFTED_KEY(kTypeLetter, 'w', 'W') }, /* 11 */
   { SHIFTED_KEY(kTypeLetter, 'e', 'E') }, /* 12 */
@@ -192,6 +123,7 @@ ScanCodeInfo g_scancodes[] = {
 
 static const int kNumScanCodes = sizeof(g_scancodes) / sizeof(g_scancodes[0]);
 
+#if 0
 static void DescribeKey(const KeyInfo& info, OutputStream* stream) {
   switch (info.type) {
     case kTypeError:
@@ -337,14 +269,29 @@ static void DescribeKey(const KeyInfo& info, OutputStream* stream) {
     stream->Printf("(right)");
   }
 }
+#endif
 
-uint64_t FormatOutputKey(const OutputKey& out) {
-  return out.key.type | (out.key.side << 8) | (out.modifiers << 16) | (uint64_t(out.key.data) << 24);
+void kbd_ack(void) {
+  while (inb(0x60) != 0xfa) {}
+}
+
+void set_keyboard_led_status(char ledstatus) {
+  outb(0x60, 0xed);
+  kbd_ack();
+  outb(0x60, ledstatus);
+  kbd_ack();
 }
 
 extern "C" {
 void _start() {
+  // Turn on capslock for debugging!
+  set_keyboard_led_status(4);
+
+  outb(0x60, 0xf4);
+  kbd_ack();
+
   DebugOutputStream stream;
+  ConsoleOutputStream console;
 
   stream.Printf("keyboard: Starting up!\n");
 
@@ -368,6 +315,7 @@ void _start() {
     SysReceive(&sender, &type, &payload);
 
     if (sender) {
+      stream.Printf("keyboard: Got key request\n");
       if (buffer_start == buffer_end) {
         requestors[num_requests++] = sender;
       } else {
@@ -377,6 +325,8 @@ void _start() {
 
       continue;
     }
+
+    //console.Printf("Got key interrupt\r\n");
 
     unsigned char scan_code = inb(0x60);
     if (scan_code == 0xe0) {
@@ -419,8 +369,8 @@ void _start() {
         }
       }
 
-      OutputKey out = { key, modifiers };
-      uint64_t formatted = FormatOutputKey(out);
+      KeyEvent event(keyup ? kKeyUpEvent : kKeyDownEvent, modifiers, key);
+      uint64_t formatted = event.Format();
 
       if (num_requests) {
         num_requests--;
@@ -434,10 +384,11 @@ void _start() {
         }
       }
 
+#if 0
       if (keyup) {
-        stream.Printf("terminal: keyup ");
+        stream.Printf("keyboard: keyup ");
       } else {
-        stream.Printf("terminal: keydown ");
+        stream.Printf("keyboard: keydown ");
       }
 
       DescribeKey(key, &stream);
@@ -456,6 +407,7 @@ void _start() {
       }
 
       stream.Printf("\n");
+#endif
     }
 
     SysAckInterrupt(1);

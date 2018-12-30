@@ -4,6 +4,7 @@
 #include "assertions.h"
 #include "elf.h"
 #include "frame_allocator.h"
+#include "kernel_module.h"
 #include "page_translation.h"
 #include "serial.h"
 #include "thread.h"
@@ -83,7 +84,32 @@ static uint64_t ParseNum(int base, const char* start, const char* end) {
   return v;
 }
 
-static void ParseArguments(const char* args, const RefPtr<AddressSpace>& as, Thread* thread) {
+class MultibootDataVisitor : public MultibootVisitor {
+public:
+  void Framebuffer(uint64_t addr, uint32_t pitch, uint32_t width, uint32_t height, uint8_t bpp) override {
+    framebuffer_start_ = addr;
+    framebuffer_end_ = addr + width * pitch;
+
+    module_data_.framebuffer.addr = addr;
+    module_data_.framebuffer.pitch = pitch;
+    module_data_.framebuffer.width = width;
+    module_data_.framebuffer.height = height;
+    module_data_.framebuffer.bpp = bpp;
+  }
+
+  phys_addr_t framebuffer_start() const { return framebuffer_start_; }
+  phys_addr_t framebuffer_end() const { return framebuffer_end_; }
+
+  KernelModuleData& module_data() { return module_data_; }
+
+private:
+  KernelModuleData module_data_;
+
+  phys_addr_t framebuffer_start_ = 0;
+  phys_addr_t framebuffer_end_ = 0;
+};
+
+static void ParseArguments(const char* args, MultibootDataVisitor* data, const RefPtr<AddressSpace>& as, Thread* thread) {
   const char* p = args;
   while (*p) {
     const char* key = p;
@@ -104,6 +130,16 @@ static void ParseArguments(const char* args, const RefPtr<AddressSpace>& as, Thr
       phys_addr_t end = ParseNum(16, comma + 1, end_value);
       g_serial->Printf("Mapping to userspace: %p to %p\n", (void*)start, (void*)end);
       as->Map(start, end, start, end, PageAttributes());
+    } else if (StringIs(key, end_key, "videomap")) {
+      if (StringIs(value, end_value, "true")) {
+        as->Map(data->framebuffer_start(), data->framebuffer_end(),
+                data->framebuffer_start(), data->framebuffer_end(),
+                PageAttributes());
+      } else if (StringIs(value, end_value, "false")) {
+        // Do nothing. This is the default.
+      } else {
+        panic("Unrecognized videomap argument");
+      }
     } else if (StringIs(key, end_key, "allow_io")) {
       if (StringIs(value, end_value, "true")) {
         thread->AllowIo();
@@ -126,7 +162,7 @@ static void ParseArguments(const char* args, const RefPtr<AddressSpace>& as, Thr
 
 class MultibootLoaderVisitor : public MultibootVisitor {
 public:
-  MultibootLoaderVisitor() {}
+  MultibootLoaderVisitor(MultibootDataVisitor* data) : data_(data) {}
 
   void Module(const char* args, uint32_t module_start, uint32_t module_end) override {
     g_serial->Printf("Loading module %s\n", args);
@@ -141,15 +177,22 @@ public:
     ElfLoaderVisitor loader_visitor(as);
     reader.Read(&loader_visitor);
 
-    Thread* thread = as->CreateThread(reader.entry_point(), 0);
+    Thread* thread = as->CreateThread(reader.entry_point(), 0,
+                                      &data_->module_data(), sizeof(KernelModuleData));
 
-    ParseArguments(args, as, thread);
+    ParseArguments(args, data_, as, thread);
 
     thread->Start();
   }
+
+private:
+  MultibootDataVisitor* data_;
 };
 
 void LoadModules(const MultibootReader& multiboot_reader) {
-  MultibootLoaderVisitor load_visitor;
+  MultibootDataVisitor data_visitor;
+  multiboot_reader.Read(&data_visitor);
+
+  MultibootLoaderVisitor load_visitor(&data_visitor);
   multiboot_reader.Read(&load_visitor);
 }

@@ -16,6 +16,8 @@
 #include "thread.h"
 #include "types.h"
 
+namespace {
+
 class MultibootPrintVisitor : public MultibootVisitor {
   void StartTag(int type) override {
     g_serial->Printf("  tag type = %u\n", type);
@@ -32,6 +34,40 @@ class MultibootPrintVisitor : public MultibootVisitor {
   void MemoryMapEntry(uint64_t base_addr, uint64_t length, MemoryMapEntryType type) override {
     g_serial->Printf("    entry @%p size=%x, type=%d\n", (void*)base_addr, (unsigned)length, (int)type);
   }
+
+  void Framebuffer(uint64_t addr, uint32_t pitch, uint32_t width, uint32_t height, uint8_t bpp) override {
+    g_serial->Printf("    framebuffer @%p w=%u h=%u, bpp=%u pitch=%u\n",
+                     (void*)addr, width, height, bpp, pitch);
+  }
+
+  void FramebufferRGBInfo(uint8_t red_field_position, uint8_t red_mask,
+                          uint8_t green_field_position, uint8_t green_mask,
+                          uint8_t blue_field_position, uint8_t blue_mask) override {
+    g_serial->Printf("    with RGB info: red:(%u,%u) green:(%u,%u) blue:(%u,%u)\n",
+                     red_field_position, red_mask,
+                     green_field_position, green_mask,
+                     blue_field_position, blue_mask);
+  }
+};
+
+class MultibootModuleVisitor : public MultibootVisitor {
+public:
+  void Module(const char* label, uint32_t module_start, uint32_t module_end) override {
+    if (module_start < module_start_) {
+      module_start_ = module_start;
+    }
+
+    if (module_end >= module_end_) {
+      module_end_ = module_end;
+    }
+  }
+
+  phys_addr_t module_start() const { return module_start_; }
+  phys_addr_t module_end() const { return module_end_; }
+
+private:
+  phys_addr_t module_start_ = UINTPTR_MAX;
+  phys_addr_t module_end_ = 0;
 };
 
 class MultibootMemoryMapVisitor : public MultibootVisitor {
@@ -46,6 +82,8 @@ public:
 private:
   FrameAllocator* frame_allocator_;
 };
+
+}  // anonymous namespace
 
 void IdleTask() {
   //asm("xchg %bx, %bx");
@@ -70,6 +108,8 @@ void kernel_physical_start();
 void kernel_physical_end();
 
 void kmain(const char* multiboot_info) {
+  MultibootReader multiboot_reader(multiboot_info);
+
   IoPorts io;
   serial_port.emplace(&io);
   g_serial = &serial_port.value();
@@ -77,12 +117,14 @@ void kmain(const char* multiboot_info) {
   g_serial->Printf("Kernel start = %p\n", (void *)kernel_physical_start);
   g_serial->Printf("Kernel end = %p\n", (void *)kernel_physical_end);
 
-  MultibootReader multiboot_reader(multiboot_info);
-
   MultibootPrintVisitor print_visitor;
   multiboot_reader.Read(&print_visitor);
 
-  frame_allocator.emplace(phys_addr_t(kernel_physical_start), phys_addr_t(kernel_physical_end));
+  MultibootModuleVisitor module_visitor;
+  multiboot_reader.Read(&module_visitor);
+
+  frame_allocator.emplace(phys_addr_t(kernel_physical_start), phys_addr_t(kernel_physical_end),
+                          module_visitor.module_start(), module_visitor.module_end());
   g_frame_allocator = &frame_allocator.value();
 
   MultibootMemoryMapVisitor mem_visitor(&frame_allocator.value());
@@ -110,6 +152,7 @@ void kmain(const char* multiboot_info) {
 
   // Disable the timer interrupt.
   interrupts->Mask(0, false);
+  interrupts->Mask(1, false);
 
   scheduler.emplace(syscall_stack_top);
   g_scheduler = &scheduler.value();
@@ -124,7 +167,6 @@ void kmain(const char* multiboot_info) {
   scheduler->Start();
 
   // TODO:
-  // - Add system calls for IPC, waiting for interrupts.
   // - Try to write drivers for keyboard, PS2 mouse, timer(?).
   // - Preemptive multitasking with timer interrupt.
   // - System calls to create threads and address spaces, map memory, etc.

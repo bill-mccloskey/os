@@ -28,6 +28,15 @@ void kinterrupt(int64_t interrupt_number, uint64_t error_code) {
     }
   }
 
+  // Page fault.
+  if (interrupt_number == 14) {
+    g_serial->Printf("Page fault: error=%u\n", uint32_t(error_code));
+    g_scheduler->DumpState();
+    for (;;) {
+      asm("hlt");
+    }
+  }
+
   int irq = g_interrupts->InterruptNumberToIRQ(interrupt_number);
   if (irq >= 0) {
     g_interrupts->Interrupt(irq);
@@ -131,28 +140,28 @@ uint16_t InterruptController::GetServicingInterrupts()
 void InterruptController::RegisterForInterrupt(int irq, Thread* thread) {
   assert_eq(registrations_[irq], nullptr);
   registrations_[irq] = thread;
+
+  Mask(irq, true);
 }
 
 void InterruptController::UnregisterForInterrupts(Thread* thread) {
   for (int i = 0; i < kMaxIRQs; i++) {
     if (registrations_[i] == thread) {
       registrations_[i] = nullptr;
+      Mask(i, false);
     }
   }
 }
 
 void InterruptController::Interrupt(int irq) {
-  //g_serial->Printf("IRQ %d received\n", irq);
-
-  // Timer
-  if (irq == 0) {
-    Acknowledge(irq);
-    outb(kPrimaryCommandPort, kEndOfInterruptCommand);
-  }
+  g_serial->Printf("IRQ %d received\n", irq);
 
   assert_lt(irq, kMaxIRQs);
   if (registrations_[irq]) {
     Thread* thread = registrations_[irq];
     thread->NotifyFromKernel();
+  } else {
+    g_serial->Printf("Acknowledging because no handler installed\n");
+    Acknowledge(irq);
   }
 }

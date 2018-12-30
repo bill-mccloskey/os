@@ -1,6 +1,7 @@
 #include "address_space.h"
 #include "frame_allocator.h"
 #include "page_translation.h"
+#include "string.h"
 #include "thread.h"
 
 static const virt_addr_t kStackBase = virt_addr_t(0x7ffffffff000);
@@ -10,15 +11,30 @@ AddressSpace::AddressSpace() {
   page_tables_.Map(0, kMaxRAMSize, kKernelVirtualStart, kKernelVirtualStart + kMaxRAMSize, PageAttributes());
 }
 
-Thread* AddressSpace::CreateThread(virt_addr_t start_func, int priority) {
+Thread* AddressSpace::CreateThread(virt_addr_t start_func, int priority,
+                                   void* stack_data, size_t stack_data_len) {
   const int kStackPages = 4;
 
   PageAttributes stack_attrs;
   stack_attrs.set_no_execute(true);
+  phys_addr_t top_stack_page;
   for (int i = 0; i < kStackPages; i++) {
     phys_addr_t page = g_frame_allocator->AllocateFrame();
     virt_addr_t virt = kStackBase - (i + 1) * kPageSize;
     Map(page, page + kPageSize, virt, virt + kPageSize, stack_attrs);
+
+    if (i == 0) {
+      top_stack_page = page;
+    }
+  }
+
+  virt_addr_t stack_base = kStackBase;
+  if (stack_data_len) {
+    assert_lt(stack_data_len, kPageSize);
+    stack_base -= stack_data_len;
+
+    virt_addr_t vstack_base = PhysicalToVirtual(top_stack_page + kPageSize - stack_data_len);
+    memcpy(reinterpret_cast<char*>(vstack_base), stack_data, stack_data_len);
   }
 
   PageAttributes guard_attrs;
@@ -26,7 +42,7 @@ Thread* AddressSpace::CreateThread(virt_addr_t start_func, int priority) {
   virt_addr_t virt = kStackBase - (kStackPages + 1) * kPageSize;
   Map(0, 0, virt, virt + kPageSize, guard_attrs);
 
-  return new Thread(start_func, kStackBase, RefPtr<AddressSpace>(this), priority);
+  return new Thread(start_func, stack_base, RefPtr<AddressSpace>(this), priority);
 }
 
 void AddressSpace::Map(phys_addr_t phys_start, phys_addr_t phys_end,

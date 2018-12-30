@@ -5,9 +5,8 @@
 
 class FrameAllocator {
 public:
-  FrameAllocator(phys_addr_t kernel_start_addr, phys_addr_t kernel_end_addr)
-    : kernel_start_addr_(kernel_start_addr),
-      kernel_end_addr_(kernel_end_addr) {}
+  FrameAllocator(phys_addr_t kernel_start_addr, phys_addr_t kernel_end_addr,
+                 phys_addr_t module_start_addr, phys_addr_t module_end_addr);
 
   void AddRegion(phys_addr_t start_addr, phys_addr_t end_addr);
 
@@ -26,6 +25,9 @@ private:
 
   phys_addr_t kernel_start_addr_;
   phys_addr_t kernel_end_addr_;
+
+  phys_addr_t module_start_addr_;
+  phys_addr_t module_end_addr_;
 
   int cur_region_ = 0;
   phys_addr_t cur_addr_ = 0;
