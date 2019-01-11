@@ -148,12 +148,20 @@ void _start(KernelModuleData* module_data) {
     em.Input(input[i]);
   }
 
+  int x, y;
+  em.GetCursorPosition(&x, &y);
+  fb.MoveCursor(x, y);
+
   for (;;) {
     int sender, type;
     uint64_t payload;
     SysReceive(&sender, &type, &payload);
 
     em.Input(payload);
+
+    int x, y;
+    em.GetCursorPosition(&x, &y);
+    fb.MoveCursor(x, y);
   }
 
   SysExitThread();

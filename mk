@@ -60,6 +60,7 @@ test_files = [
     'kernel/page_tables_test.cc',
     'base/linked_list_test.cc',
     'drivers/console/emulator_test.cc',
+    'fs/inode_test.cc',
 ]
 
 test_data = {
@@ -69,6 +70,7 @@ test_data = {
 extra_test_files = {
     'kernel/allocator_test.cc': ['kernel/frame_allocator.cc'],
     'kernel/page_tables_test.cc': ['kernel/frame_allocator.cc', 'kernel/page_tables.cc'],
+    'fs/inode_test.cc': ['fs/inode.cc'],
 }
 
 extra_test_obj_files = {
@@ -186,6 +188,7 @@ def build():
     os.system('mkdir -p obj/drivers/keyboard')
     os.system('mkdir -p obj/test_program')
     os.system('mkdir -p obj/builtins')
+    os.system('mkdir -p obj/fs')
 
     build_kernel()
     build_test_program()

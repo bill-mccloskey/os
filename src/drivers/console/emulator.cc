@@ -164,7 +164,7 @@ int TerminalEmulator::LimitBottom() {
 
 void TerminalEmulator::SnapCursor() {
   if (x_ < 0) x_ = 0;
-  if (x_ >= output_->Width()) x_ = output_->Width();
+  if (x_ >= output_->Width()) x_ = output_->Width() - 1;
 
   if (y_ < LimitTop()) y_ = LimitTop();
   if (y_ > LimitBottom()) y_ = LimitBottom();

@@ -41,7 +41,33 @@ int RasterFrameBuffer::Height() {
   return fb_->height / glyph_height_;
 }
 
+void RasterFrameBuffer::DrawCursor(int x, int y) {
+  if (x < 0 || y < 0) return;
+
+  x *= kGlyphWidth;
+  y *= glyph_height_;
+
+  char* dst = (char*)fb_->addr + y * fb_->pitch + x * (fb_->bpp / 8);
+
+  for (int row = 0; row < glyph_height_; row++) {
+    for (int col = 7; col >= 0; col--) {
+      *dst = *dst ^ 0xff;
+      dst++;
+      *dst = *dst ^ 0xff;
+      dst++;
+      *dst = *dst ^ 0xff;
+      dst++;
+      dst++;
+    }
+    dst += fb_->pitch - 8 * (fb_->bpp / 8);
+  }
+}
+
 void RasterFrameBuffer::MoveCursor(int x, int y) {
+  DrawCursor(x_, y_);
+  x_ = x;
+  y_ = y;
+  DrawCursor(x_, y_);
 }
 
 void RasterFrameBuffer::SelectColor(Color color, bool is_fg, int* red, int* green, int* blue) {
@@ -121,6 +147,9 @@ void RasterFrameBuffer::SelectColor(Color color, bool is_fg, int* red, int* gree
 }
 
 void RasterFrameBuffer::WriteCell(int x, int y, char c, Color fg, Color bg) {
+  int cursor_mask = 0;
+  if (x == x_ && y == y_) cursor_mask = 0xff;
+
   x *= kGlyphWidth;
   y *= glyph_height_;
 
@@ -136,14 +165,14 @@ void RasterFrameBuffer::WriteCell(int x, int y, char c, Color fg, Color bg) {
   for (int row = 0; row < glyph_height_; row++) {
     for (int col = 7; col >= 0; col--) {
       if (*src & (1 << col)) {
-        *dst++ = fg_blue;
-        *dst++ = fg_green;
-        *dst++ = fg_red;
+        *dst++ = fg_blue ^ cursor_mask;
+        *dst++ = fg_green ^ cursor_mask;
+        *dst++ = fg_red ^ cursor_mask;
         dst++;
       } else {
-        *dst++ = bg_blue;
-        *dst++ = bg_green;
-        *dst++ = bg_red;
+        *dst++ = bg_blue ^ cursor_mask;
+        *dst++ = bg_green ^ cursor_mask;
+        *dst++ = bg_red ^ cursor_mask;
         dst++;
       }
     }
@@ -154,6 +183,7 @@ void RasterFrameBuffer::WriteCell(int x, int y, char c, Color fg, Color bg) {
 
 void RasterFrameBuffer::Clear() {
   memset((char*)fb_->addr, 0xd3, fb_->pitch * fb_->height);
+  DrawCursor(x_, y_);
 }
 
 void RasterFrameBuffer::CopyCell(int dst_x, int dst_y, int src_x, int src_y) {

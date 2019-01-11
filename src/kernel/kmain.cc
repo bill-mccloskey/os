@@ -150,10 +150,6 @@ void kmain(const char* multiboot_info) {
   g_interrupts = &interrupts.value();
   interrupts->Init();
 
-  // Disable the timer interrupt.
-  interrupts->Mask(0, false);
-  interrupts->Mask(1, false);
-
   scheduler.emplace(syscall_stack_top);
   g_scheduler = &scheduler.value();
 

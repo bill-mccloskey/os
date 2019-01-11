@@ -228,7 +228,7 @@ int main(int argc, char** argv) {
 
   phys_addr_t phys = VirtualToPhysical(virt);
 
-  FrameAllocator frame_alloc(0, 0);
+  FrameAllocator frame_alloc(0, 0, 0, 0);
   frame_alloc.AddRegion(phys, phys + (1 << 20));
   g_frame_allocator = &frame_alloc;
 

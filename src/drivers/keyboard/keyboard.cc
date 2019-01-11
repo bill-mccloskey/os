@@ -282,6 +282,16 @@ void set_keyboard_led_status(char ledstatus) {
   kbd_ack();
 }
 
+#if 0
+static void Delay() {
+  int a;
+  volatile int* x = &a;
+  for (int i = 0; i < 1000000; i++) {
+    *x = 100;
+  }
+}
+#endif
+
 extern "C" {
 void _start() {
   // Turn on capslock for debugging!
@@ -289,6 +299,16 @@ void _start() {
 
   outb(0x60, 0xf4);
   kbd_ack();
+
+  // Disable PS/2 mouse.
+  while ((inb(0x64) & 1) != 0) {}
+  outb(0x64, 0xa7);
+
+  // Set highest repeat rate and low repeat delay.
+  //outb(0x60, 0xf3);
+  //kbd_ack();
+  //outb(0x60, 0);
+  //kbd_ack();
 
   DebugOutputStream stream;
   ConsoleOutputStream console;
@@ -325,6 +345,8 @@ void _start() {
 
       continue;
     }
+
+    //Delay();
 
     //console.Printf("Got key interrupt\r\n");
 
@@ -411,6 +433,8 @@ void _start() {
     }
 
     SysAckInterrupt(1);
+
+    //Delay();
   }
 
   SysExitThread();

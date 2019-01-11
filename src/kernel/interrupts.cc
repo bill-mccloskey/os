@@ -72,6 +72,10 @@ void InterruptController::Init() {
   io_->Out(kPrimaryDataPort, kICW4_8086);
   io_->Out(kSecondaryDataPort, kICW4_8086);
 
+  // IRQ 2 is for the secondary controller. Leave it enabled.
+  mask1 = ~(1 << 2);
+  mask2 = ~0;
+
   // Restore saved masks.
   io_->Out(kPrimaryDataPort, mask1);
   io_->Out(kSecondaryDataPort, mask2);

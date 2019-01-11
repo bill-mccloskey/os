@@ -28,11 +28,15 @@ private:
   unsigned char* GlyphData(int ch);
   void SelectColor(Color color, bool is_fg, int* red, int* green, int* blue);
 
+  void DrawCursor(int x, int y);
+
   static const int kGlyphWidth = 8;
 
   FrameBufferData* fb_;
   unsigned char* font_;
   int glyph_height_;
+
+  int x_ = -1, y_ = -1;
 };
 
 #endif  // raster_frame_buffer_h

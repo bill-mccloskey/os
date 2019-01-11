@@ -1,7 +1,8 @@
 #ifndef assertions_h
 #define assertions_h
 
-void AssertionFailure(const char* filename, int line, const char* msg1, const char* msg2, const char* msg3, const char* msg4);
+void AssertionFailure(const char* filename, int line,
+                      const char* msg1, const char* msg2, const char* msg3, const char* msg4) __attribute__((noreturn));
 
 #define assert(cond) do { \
     if (!(cond)) { \
