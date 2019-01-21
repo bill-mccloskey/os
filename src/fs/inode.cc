@@ -1,5 +1,5 @@
 #include "inode.h"
-#include "assertions.h"
+#include "base/assertions.h"
 
 // FIXME: Need some kind of logging facility that works in the kernel and in tests and in userspace.
 // Need test infrastructure for doing test-only callbacks/logging that can be tested against.
@@ -59,9 +59,7 @@ InodeHandle::InodeHandle(FileSystem* fs,
                          InodeHandle::InodeLayout* layout)
   : fs_(fs),
     env_(fs->env()),
-    inode_(inode),
     inode_block_(inode_block),
-    index_(inode_index),
     layout_(layout)
 {
 }

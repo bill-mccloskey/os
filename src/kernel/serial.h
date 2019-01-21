@@ -1,8 +1,8 @@
 #ifndef serial_h
 #define serial_h
 
-#include "io.h"
-#include "output_stream.h"
+#include "base/io.h"
+#include "base/output_stream.h"
 
 class SerialPort : public OutputStream {
 public:

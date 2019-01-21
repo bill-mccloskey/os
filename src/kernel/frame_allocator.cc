@@ -1,6 +1,6 @@
 #include "frame_allocator.h"
 
-#include "assertions.h"
+#include "base/assertions.h"
 #include "page_translation.h"
 
 FrameAllocator* g_frame_allocator;

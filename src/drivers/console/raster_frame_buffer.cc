@@ -1,13 +1,9 @@
 #include "raster_frame_buffer.h"
 
-#include "assertions.h"
-#include "string.h"
+#include "base/assertions.h"
+#include "drivers/console/console_fonts.h"
 
-// Font file, which exports Lat15_Fixed16_psf and Lat15_Fixed16_psf_len.
-#include "drivers/console/Lat15-Fixed16.h"
-
-// Font file, which exports Lat15_VGA16_psf and Lat15_VGA16_psf_len.
-#include "drivers/console/Lat15-VGA16.h"
+#include <string.h>
 
 RasterFrameBuffer::RasterFrameBuffer(FrameBufferData* fb, FontName font) : fb_(fb) {
   // See http://www.fifi.org/doc/console-tools-dev/file-formats/psf.
@@ -16,9 +12,9 @@ RasterFrameBuffer::RasterFrameBuffer(FrameBufferData* fb, FontName font) : fb_(f
   static const int kFileMode = 2;
 
   if (font == VGA) {
-    font_ = Lat15_VGA16_psf;
+    font_ = GetFont_VGA();
   } else {
-    font_ = Lat15_Fixed16_psf;
+    font_ = GetFont_Fixed();
   }
 
   assert_eq(font_[0], kPSFMagic0);

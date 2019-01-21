@@ -1,8 +1,8 @@
 #ifndef interrupts_h
 #define interrupts_h
 
-#include "io.h"
-#include "types.h"
+#include "base/io.h"
+#include "base/types.h"
 
 class Thread;
 

@@ -1,7 +1,7 @@
 #include "text_frame_buffer.h"
-#include "assertions.h"
 
-#include "io.h"
+#include "base/assertions.h"
+#include "base/io.h"
 
 // The I/O ports. To change a VGA register, first set the register location by writing it to kAddressPort.
 // Then read or write the value by reading or writing from kDataPort.

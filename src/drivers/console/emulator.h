@@ -1,7 +1,7 @@
 #ifndef drivers_terminal_emulator_h
 #define drivers_terminal_emulator_h
 
-#include "types.h"
+#include "base/types.h"
 #include "vtparse.h"
 
 struct CellAttributes {

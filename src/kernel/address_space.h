@@ -1,10 +1,10 @@
 #ifndef address_space_h
 #define address_space_h
 
-#include "allocator.h"
-#include "page_tables.h"
-#include "refcount.h"
-#include "types.h"
+#include "base/refcount.h"
+#include "base/types.h"
+#include "kernel/allocator.h"
+#include "kernel/page_tables.h"
 
 class Thread;
 

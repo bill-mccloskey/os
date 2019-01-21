@@ -1,14 +1,14 @@
 #include "loader.h"
 
-#include "address_space.h"
-#include "assertions.h"
-#include "elf.h"
-#include "frame_allocator.h"
-#include "kernel_module.h"
-#include "page_translation.h"
-#include "serial.h"
-#include "thread.h"
-#include "types.h"
+#include "kernel/elf.h"
+#include "base/kernel_module.h"
+#include "base/types.h"
+#include "kernel/address_space.h"
+#include "base/assertions.h"
+#include "kernel/frame_allocator.h"
+#include "kernel/page_translation.h"
+#include "kernel/serial.h"
+#include "kernel/thread.h"
 
 class ElfLoaderVisitor : public ElfVisitor {
 public:

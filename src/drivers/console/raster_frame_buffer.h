@@ -1,8 +1,8 @@
 #ifndef raster_frame_buffer_h
 #define raster_frame_buffer_h
 
-#include "abstract_frame_buffer.h"
-#include "kernel_module.h"
+#include "base/kernel_module.h"
+#include "drivers/console/abstract_frame_buffer.h"
 
 class RasterFrameBuffer : public AbstractFrameBuffer {
 public:

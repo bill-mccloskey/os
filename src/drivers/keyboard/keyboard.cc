@@ -1,8 +1,8 @@
-#include "io.h"
-#include "keyboard.h"
-#include "output_stream.h"
-#include "system.h"
-#include "types.h"
+#include "base/io.h"
+#include "base/output_stream.h"
+#include "base/types.h"
+#include "usr/keyboard.h"
+#include "usr/system.h"
 
 class DebugOutputStream : public OutputStream {
 public:
@@ -123,7 +123,6 @@ ScanCodeInfo g_scancodes[] = {
 
 static const int kNumScanCodes = sizeof(g_scancodes) / sizeof(g_scancodes[0]);
 
-#if 0
 static void DescribeKey(const KeyInfo& info, OutputStream* stream) {
   switch (info.type) {
     case kTypeError:
@@ -269,7 +268,6 @@ static void DescribeKey(const KeyInfo& info, OutputStream* stream) {
     stream->Printf("(right)");
   }
 }
-#endif
 
 void kbd_ack(void) {
   while (inb(0x60) != 0xfa) {}
@@ -335,7 +333,7 @@ void _start() {
     SysReceive(&sender, &type, &payload);
 
     if (sender) {
-      stream.Printf("keyboard: Got key request\n");
+      //stream.Printf("keyboard: Got key request\n");
       if (buffer_start == buffer_end) {
         requestors[num_requests++] = sender;
       } else {

@@ -1,8 +1,8 @@
-#include "assertions.h"
-#include "interrupts.h"
-#include "serial.h"
-#include "thread.h"
-#include "types.h"
+#include "base/assertions.h"
+#include "base/types.h"
+#include "kernel/interrupts.h"
+#include "kernel/serial.h"
+#include "kernel/thread.h"
 
 typedef void (*GenericSysCall)();
 

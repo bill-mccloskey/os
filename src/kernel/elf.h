@@ -1,7 +1,7 @@
 #ifndef elf_h
 #define elf_h
 
-#include "types.h"
+#include "base/types.h"
 
 class ElfVisitor {
 public:

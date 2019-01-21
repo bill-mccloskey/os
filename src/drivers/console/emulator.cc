@@ -1,7 +1,7 @@
 // FIXME: Wrapping. Also, vertical wrapping (how does that work?).
 
 #include "emulator.h"
-#include "assertions.h"
+#include "base/assertions.h"
 
 static const int kBufferEnd = 0;
 static const int kBEL = 7;

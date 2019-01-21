@@ -1,8 +1,8 @@
 #ifndef protection_h
 #define protection_h
 
-#include "frame_allocator.h"
-#include "types.h"
+#include "base/types.h"
+#include "kernel/frame_allocator.h"
 
 const int kKernelPrivilege = 0;
 const int kUserPrivilege = 3;

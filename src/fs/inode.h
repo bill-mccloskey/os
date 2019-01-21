@@ -5,7 +5,7 @@
 // What happens to InodeHandles when the file system is unmounted?
 // Should I maintain some sort of refcount?
 
-#include "types.h"
+#include "base/types.h"
 
 using block_number_t = uint64_t;
 using inode_number_t = uint64_t;
@@ -22,6 +22,8 @@ enum class ErrorCode {
 
 class BlockHandle {
 public:
+  virtual ~BlockHandle() {}
+
   virtual block_number_t block_number() const = 0;
   virtual char* Get() = 0;
   virtual void SetDirty() = 0;
@@ -109,9 +111,7 @@ private:
 
   FileSystem* fs_;
   FileSystemEnv* env_;
-  inode_number_t inode_;
   BlockHandle* inode_block_;
-  int index_;
   InodeLayout* layout_;
 };
 

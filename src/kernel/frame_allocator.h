@@ -1,7 +1,7 @@
 #ifndef frame_allocator_h
 #define frame_allocator_h
 
-#include "types.h"
+#include "base/types.h"
 
 class FrameAllocator {
 public:

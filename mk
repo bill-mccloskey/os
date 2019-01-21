@@ -1,245 +1,333 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
-import os
-import os.path
-import sys
+# TODO:
+# - Emulator test data
 
-kernel_files = [
-    'base/io.cc',
-    'base/output_stream.cc',
-    'builtins/string.cc',
-    'kernel/address_space.cc',
-    'kernel/assertions.cc',
-    'kernel/elf.cc',
-    'kernel/frame_allocator.cc',
-    'kernel/interrupt_handlers.s',
-    'kernel/interrupts.cc',
-    'kernel/kmain.cc',
-    'kernel/loader.cc',
-    'kernel/loader32.s',
-    'kernel/loader64.s',
-    'kernel/multiboot_header.s',
-    'kernel/multiboot.cc',
-    'kernel/page_tables.cc',
-    'kernel/protection.cc',
-    'kernel/serial.cc',
-    'kernel/system_calls.cc',
-    'kernel/thread.cc',
-]
+from build.rules import kernel, lib, test_lib, test, task, commands
+from build.commands import go, add_target_command
 
-console_files = [
-    'base/io.cc',
-    'base/output_stream.cc',
-    'base/driver_assertions.cc',
-    'builtins/string.cc',
-    'usr/syscall.s',
-    'drivers/console/abstract_frame_buffer.cc',
-    'drivers/console/raster_frame_buffer.cc',
-    'drivers/console/text_frame_buffer.cc',
-    'drivers/console/console.cc',
-    'drivers/console/vtparse.c',
-    'drivers/console/vtparse_table.c',
-    'drivers/console/emulator.cc',
-]
-
-keyboard_files = [
-    'base/io.cc',
-    'base/output_stream.cc',
-    'usr/syscall.s',
-    'drivers/keyboard/keyboard.cc',
-]
-
-test_program_files = [
-    'base/output_stream.cc',
-    'usr/syscall.s',
-    'test_program/test_program.cc',
-]
-
-test_files = [
-    'kernel/allocator_test.cc',
-    'kernel/page_tables_test.cc',
-    'base/linked_list_test.cc',
-    'drivers/console/emulator_test.cc',
-    'fs/inode_test.cc',
-]
-
-test_data = {
-    'drivers/console/emulator_test.cc': 'drivers/console/emulator_test_data',
-}
-
-extra_test_files = {
-    'kernel/allocator_test.cc': ['kernel/frame_allocator.cc'],
-    'kernel/page_tables_test.cc': ['kernel/frame_allocator.cc', 'kernel/page_tables.cc'],
-    'fs/inode_test.cc': ['fs/inode.cc'],
-}
-
-extra_test_obj_files = {
-    'drivers/console/emulator_test.cc': [
-        'drivers/console/vtparse.o',
-        'drivers/console/vtparse_table.o',
-        'drivers/console/emulator.o',
+test_lib(
+    target='gtest.lib',
+    src_path='googletest/googletest',
+    hdr_path='googletest/googletest',
+    public_hdr_path='googletest/googletest/include',
+    cmds={
+        'src/gtest-all.cc':
+        ('{cc_compiler} {cc_flags} -isystem include -I. -pthread ' +
+         '-c src/gtest-all.cc -o {outfile}')
+    },
+    hdrs=[
+        'src/gtest.cc',
+        'src/gtest-death-test.cc',
+        'src/gtest-filepath.cc',
+        'src/gtest-port.cc',
+        'src/gtest-printers.cc',
+        'src/gtest-test-part.cc',
+        'src/gtest-typed-test.cc',
+        'src/gtest-internal-inl.h',
     ],
-}
+    public_hdrs=[
+        'gtest/gtest-death-test.h',
+        'gtest/gtest.h',
+        'gtest/gtest-message.h',
+        'gtest/gtest-param-test.h',
+        'gtest/gtest_pred_impl.h',
+        'gtest/gtest-printers.h',
+        'gtest/gtest_prod.h',
+        'gtest/gtest-spi.h',
+        'gtest/gtest-test-part.h',
+        'gtest/gtest-typed-test.h',
 
-#compiler = 'x86_64-elf-g++'
-#c_compiler = 'x86_64-elf-gcc'
+        'gtest/internal/gtest-death-test-internal.h',
+        'gtest/internal/gtest-filepath.h',
+        'gtest/internal/gtest-internal.h',
+        'gtest/internal/gtest-param-util-generated.h',
+        'gtest/internal/gtest-param-util.h',
+        'gtest/internal/gtest-port-arch.h',
+        'gtest/internal/gtest-port.h',
+        'gtest/internal/gtest-string.h',
+        'gtest/internal/gtest-type-util.h',
 
-compiler = 'clang++ --target=x86_64-pc-none-elf'
-c_compiler = 'clang --target=x86_64-pc-none-elf'
-
-cflags = (
-    '-march=x86-64 -g ' +
-    '-ffreestanding  -fno-builtin -nostdlib -nostdinc++ ' +
-    '-fno-stack-protector -mno-red-zone -mcmodel=large ' +
-    '-mno-mmx -mno-sse -mno-sse2 -fno-rtti ' +
-    '-fomit-frame-pointer -fno-exceptions -fno-asynchronous-unwind-tables -fno-unwind-tables ' +
-    '-Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-const-variable -Wno-missing-field-initializers ' +
-    '-isystem src/builtins ' +
-    '-Isrc/base -Isrc/usr -Iobj '
+        'gtest/internal/custom/gtest.h',
+        'gtest/internal/custom/gtest-port.h',
+        'gtest/internal/custom/gtest-printers.h',
+    ],
 )
 
-ccflags = (
-    '-std=c++14 ' + cflags
+lib(
+    target='console_fonts.lib',
+    public_hdrs=[
+        'drivers/console/console_fonts.h',
+    ],
+    srcs=[
+        'drivers/console/console_fonts.cc',
+    ],
+    hdrs=[
+        'drivers/console/Lat15-Fixed16.psf',
+        'drivers/console/Lat15-VGA16.psf',
+    ],
+    file_transform={
+        '.psf': 'xxd -i {infile} > {outfile}',
+    }
 )
 
-#test_compiler = 'g++'
-#test_c_compiler = 'gcc'
+lib(
+    target='base.lib',
+    srcs=[
+        'base/assertions.cc',
+        'base/io.cc',
+        'base/output_stream.cc',
+        'base/placement_new.cc',
+        'base/string.cc',
+    ],
+    public_hdrs=[
+        'base/assertions.h',
+        'base/io.h',
+        'base/kernel_module.h',
+        'base/lazy_global.h',
+        'base/linked_list.h',
+        'base/output_stream.h',
+        'base/placement_new.h',
+        'base/refcount.h',
+        'base/types.h',
+    ],
+    hdrs=[
+        'kernel/serial.h',
+        'usr/system.h',
+    ],
+    mode_flags={
+        'kernel': ['-DKERNEL_BUILD'],
+        'task': ['-DTASK_BUILD'],
+        'test': ['-DTEST_BUILD'],
+    },
+)
 
-test_compiler = 'clang++'
-test_c_compiler = 'clang'
+lib(
+    target='task.lib',
+    srcs=[
+        'usr/syscall.s',
+    ],
+    public_hdrs=[
+        'usr/system.h',
+    ],
+    deps=[
+        'base.lib',
+    ],
+)
 
-asflags = '-f elf64'
-ldflags = '-n -T link.ld'
+lib(
+    target='keyboard.lib',
+    srcs=[],
+    public_hdrs=[
+        'usr/keyboard.h',
+    ],
+)
 
-def run(cmd, d):
-    d = d.copy()
-    d.update(globals())
-    cmd = cmd.format(**d)
-    print cmd
-    code = os.system(cmd)
-    if code:
-        sys.exit(code)
+lib(
+    target='emulator.lib',
+    srcs=[
+        'drivers/console/vtparse.c',
+        'drivers/console/vtparse_table.c',
+        'drivers/console/emulator.cc',
+    ],
+    public_hdrs=[
+        'drivers/console/emulator.h',
+        'drivers/console/vtparse.h',
+        'drivers/console/vtparse_table.h',
+    ],
+    deps=[
+        'base.lib',
+    ],
+)
 
-def build_cc(inp, out):
-    run('{compiler} {ccflags} -c {inp} -o {out}', locals())
+test(
+    target='emulator_test',
+    srcs=['drivers/console/emulator_test.cc'],
+    deps=[
+        'emulator.lib',
+        'gtest.lib',
+    ],
+)
 
-def build_c(inp, out):
-    run('{c_compiler} {cflags} -c {inp} -o {out}', locals())
+task(
+    target='console.elf',
+    srcs=[
+        'drivers/console/abstract_frame_buffer.cc',
+        'drivers/console/raster_frame_buffer.cc',
+        'drivers/console/text_frame_buffer.cc',
+        'drivers/console/console.cc',
+    ],
+    hdrs=[
+        'drivers/console/abstract_frame_buffer.h',
+        'drivers/console/raster_frame_buffer.h',
+        'drivers/console/text_frame_buffer.h',
+    ],
+    deps=[
+        'base.lib',
+        'task.lib',
+        'console_fonts.lib',
+        'emulator.lib',
+    ],
+)
 
-def build_asm(inp, out):
-    run('nasm {asflags} {inp} -o {out}', locals())
+task(
+    target='keyboard.elf',
+    srcs=[
+        'drivers/keyboard/keyboard.cc',
+    ],
+    deps=[
+        'base.lib',
+        'task.lib',
+        'keyboard.lib',
+    ],
+)
 
-def build_files(files):
-    obj_files = []
-    for f in files:
-        if f.endswith('.cc'):
-            objfile = 'obj/' + f.replace('.cc', '.o')
-            build_cc('src/' + f, objfile)
-        elif f.endswith('.c'):
-            objfile = 'obj/' + f.replace('.c', '.o')
-            build_c('src/' + f, objfile)
-        elif f.endswith('.s'):
-            objfile = 'obj/' + f.replace('.s', '.o')
-            build_asm('src/' + f, objfile)
-        obj_files.append(objfile)
+task(
+    target='test_program.elf',
+    srcs=[
+        'test_program/test_program.cc',
+    ],
+    deps=[
+        'base.lib',
+        'task.lib',
+        'keyboard.lib',
+    ],
+)
 
-    return obj_files
+lib(
+    target='inode.lib',
+    srcs=[
+        'fs/inode.cc',
+    ],
+    public_hdrs=[
+        'fs/inode.h',
+    ],
+    deps=[
+        'base.lib',
+    ],
+)
 
-def build_kernel():
-    obj_files = build_files(kernel_files)
-    obj_files = ' '.join(obj_files)
-    run('ld {ldflags} {obj_files} -o obj/kernel.elf', locals())
+test(
+    target='inode_test',
+    srcs=['fs/inode_test.cc'],
+    deps=[
+        'inode.lib',
+        'gtest.lib',
+    ],
+)
 
-def build_console_driver():
-    run('cd src/drivers/console; xxd -i Lat15-Fixed16.psf > ../../../obj/drivers/console/Lat15-Fixed16.h', locals())
-    run('cd src/drivers/console; xxd -i Lat15-VGA16.psf > ../../../obj/drivers/console/Lat15-VGA16.h', locals())
+lib(
+    target='kmem.lib',
+    srcs=[
+        'kernel/frame_allocator.cc',
+        'kernel/page_tables.cc',
+    ],
+    public_hdrs=[
+        'kernel/allocator.h',
+        'kernel/frame_allocator.h',
+        'kernel/page_tables.h',
+        'kernel/page_translation.h',
+    ],
+    deps=[
+        'base.lib',
+    ],
+)
 
-    obj_files = build_files(console_files)
-    obj_files = ' '.join(obj_files)
-    run('{compiler} {ccflags} {obj_files} -o obj/console.elf', locals())
+test(
+    target='allocator_test',
+    srcs=['kernel/allocator_test.cc'],
+    deps=[
+        'kmem.lib',
+        'gtest.lib',
+    ],
+)
 
-def build_keyboard_driver():
-    obj_files = build_files(keyboard_files)
-    obj_files = ' '.join(obj_files)
-    run('{compiler} {ccflags} {obj_files} -o obj/keyboard.elf', locals())
+test(
+    target='page_tables_test',
+    srcs=['kernel/page_tables_test.cc'],
+    deps=[
+        'kmem.lib',
+        'gtest.lib',
+    ],
+)
 
-def build_test_program():
-    obj_files = build_files(test_program_files)
-    obj_files = ' '.join(obj_files)
-    run('{compiler} {ccflags} {obj_files} -o obj/test_program.elf', locals())
+test(
+    target='linked_list_test',
+    srcs=['base/linked_list_test.cc'],
+    deps=[
+        'base.lib',
+        'gtest.lib',
+    ],
+)
 
-def build_iso():
-    run('mkdir -p obj/iso/boot/grub', {})
-    run('mkdir -p obj/iso/modules', {})
-    run('cp obj/kernel.elf obj/iso/boot', {})
-    run('cp obj/console.elf obj/iso/modules', {})
-    run('cp obj/keyboard.elf obj/iso/modules', {})
-    run('cp obj/test_program.elf obj/iso/modules', {})
-    run('cp grub.cfg obj/iso/boot/grub', {})
-    run('grub-mkrescue /usr/lib/grub/i386-pc -o obj/os.iso obj/iso', {})
-    run('rm -r obj/iso', {})
+kernel(
+    target='kernel.elf',
+    srcs=[
+        'kernel/address_space.cc',
+        'kernel/elf.cc',
+        'kernel/interrupt_handlers.s',
+        'kernel/interrupts.cc',
+        'kernel/kmain.cc',
+        'kernel/loader.cc',
+        'kernel/loader32.s',
+        'kernel/loader64.s',
+        'kernel/multiboot_header.s',
+        'kernel/multiboot.cc',
+        'kernel/protection.cc',
+        'kernel/serial.cc',
+        'kernel/system_calls.cc',
+        'kernel/thread.cc',
+    ], hdrs=[
+        'kernel/address_space.h',
+        'kernel/elf.h',
+        'kernel/interrupts.h',
+        'kernel/loader.h',
+        'kernel/multiboot.h',
+        'kernel/protection.h',
+        'kernel/serial.h',
+        'kernel/thread.h',
+    ], deps=[
+        'base.lib',
+        'kmem.lib',
+    ]
+)
 
-def build():
-    os.system('mkdir -p obj')
-    os.system('mkdir -p obj/kernel')
-    os.system('mkdir -p obj/base')
-    os.system('mkdir -p obj/usr')
-    os.system('mkdir -p obj/drivers/console')
-    os.system('mkdir -p obj/drivers/keyboard')
-    os.system('mkdir -p obj/test_program')
-    os.system('mkdir -p obj/builtins')
-    os.system('mkdir -p obj/fs')
+commands(
+    target='os.iso',
+    cmds=[
+        'mkdir -p iso/boot/grub',
+        'mkdir -p iso/modules',
+        'cp kernel.elf iso/boot',
+        'cp console.elf iso/modules',
+        'cp keyboard.elf iso/modules',
+        'cp test_program.elf iso/modules',
+        'cp grub.cfg iso/boot/grub',
+        'grub-mkrescue /usr/lib/grub/i386-pc -o os.iso iso',
+    ],
+    data=[
+        'grub.cfg',
+    ],
+    deps=[
+        'kernel.elf',
+        'console.elf',
+        'keyboard.elf',
+        'test_program.elf',
+    ],
+)
 
-    build_kernel()
-    build_test_program()
-    build_console_driver()
-    build_keyboard_driver()
-    build_iso()
+add_target_command(
+    name='bochs',
+    target='os.iso',
+    command='bochs -f bochsrc.txt -q',
+)
 
-def build_tests():
-    os.system('mkdir -p obj')
-    os.system('mkdir -p obj/tests')
+add_target_command(
+    name='qemu',
+    target='os.iso',
+    command=
+    'qemu-system-x86_64 -cdrom obj/os.iso -serial mon:stdio '
+    '-device isa-debug-exit,iobase=0xf4,iosize=0x01',
+)
 
-    gtest = 'googletest/googletest'
-    run('{test_compiler} -std=c++14 -isystem {gtest}/include -I{gtest} -pthread -c {gtest}/src/gtest-all.cc -o obj/gtest-all.o', locals())
-    run('ar -rv obj/libgtest.a obj/gtest-all.o', locals())
-
-    for f in test_files:
-        objfile = 'obj/' + f.replace('.cc', '')
-        extra = extra_test_files.get(f, []) + ['base/gtest_assertions.cc']
-        extra = ' '.join([ 'src/' + ex for ex in extra ])
-
-        extra_obj = extra_test_obj_files.get(f, [])
-        extra_obj = ' '.join([ 'obj/' + ex for ex in extra_obj ])
-
-        include = '-Isrc -Isrc/base -I{gtest}/include '.format(**locals())
-        run('{test_compiler} -g -DTESTING -std=c++14 -o {objfile} {include} src/{f} {extra} {extra_obj} -pthread obj/libgtest.a',
-            locals())
-
-        if f in test_data:
-            os.system('mkdir -p obj/%s' % os.path.dirname(test_data[f]))
-            os.system('ln -sf %s obj/%s' % (os.path.relpath('src/' + test_data[f], test_data[f]),
-                                            os.path.dirname(test_data[f])))
-
-def clean():
-    os.system('rm -rf obj')
-
-def run_bochs():
-    os.system('bochs -f bochsrc.txt -q')
-
-def run_qemu():
-    os.system('qemu-system-x86_64 -cdrom obj/os.iso -serial mon:stdio ' +
-              '-device isa-debug-exit,iobase=0xf4,iosize=0x01')
-
-if sys.argv[1] == 'clean':
-    clean()
-elif sys.argv[1] == 'build':
-    build()
-elif sys.argv[1] == 'tests':
-    build_tests()
-elif sys.argv[1] == 'bochs':
-    build()
-    run_bochs()
-elif sys.argv[1] == 'qemu':
-    build()
-    run_qemu()
+if __name__ == '__main__':
+    go()

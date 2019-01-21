@@ -1,7 +1,7 @@
 #ifndef keyboard_h
 #define keyboard_h
 
-#include "types.h"
+#include "base/types.h"
 
 enum KeyType {
   kTypeNone,

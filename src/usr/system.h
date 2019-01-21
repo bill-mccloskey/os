@@ -1,7 +1,7 @@
 #ifndef system_h
 #define system_h
 
-#include "types.h"
+#include "base/types.h"
 
 extern "C" {
 void SysWriteByte(char c);

@@ -1,8 +1,8 @@
 #ifndef text_frame_buffer_h
 #define text_frame_buffer_h
 
-#include "abstract_frame_buffer.h"
-#include "io.h"
+#include "base/io.h"
+#include "drivers/console/abstract_frame_buffer.h"
 
 class TextFrameBuffer : public AbstractFrameBuffer {
 public:

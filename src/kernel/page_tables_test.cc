@@ -12,10 +12,10 @@ uintptr_t g_kernel_virtual_start = 0;
 intptr_t g_kernel_virtual_offset = (1 << 21);
 
 static virt_addr_t MakeAddressForTables(uint64_t tab1, uint64_t tab2, uint64_t tab3, uint64_t tab4) {
-  EXPECT_EQ(tab1 & ~0x1ff, 0);
-  EXPECT_EQ(tab2 & ~0x1ff, 0);
-  EXPECT_EQ(tab3 & ~0x1ff, 0);
-  EXPECT_EQ(tab4 & ~0x1ff, 0);
+  EXPECT_EQ(tab1 & ~0x1ff, 0u);
+  EXPECT_EQ(tab2 & ~0x1ff, 0u);
+  EXPECT_EQ(tab3 & ~0x1ff, 0u);
+  EXPECT_EQ(tab4 & ~0x1ff, 0u);
 
   virt_addr_t addr = (((tab1 << (9*3)) + (tab2 << (9*2)) + (tab3 << (9*1)) + (tab4 << (9*0))) << 12);
   if (addr & (virt_addr_t(1) << 47)) addr |= ~virt_addr_t((virt_addr_t(1) << 48) - 1);
@@ -79,9 +79,9 @@ static phys_addr_t ReadEntry(uint64_t entry, int level, int stop_level, const Pa
     }
 
     if (stop_level == 2) {
-      EXPECT_EQ(phys & (kLargePageSize - 1), 0);
+      EXPECT_EQ(phys & (kLargePageSize - 1), 0ul);
     } else if (stop_level == 1) {
-      EXPECT_EQ(phys & (kHugePageSize - 1), 0);
+      EXPECT_EQ(phys & (kHugePageSize - 1), 0ul);
     }
   } else {
     EXPECT_EQ(GetBit(entry, 6), 0);
@@ -90,7 +90,7 @@ static phys_addr_t ReadEntry(uint64_t entry, int level, int stop_level, const Pa
   }
 
   // I think this is where the PCID would go.
-  EXPECT_EQ((entry >> 52) & ((1 << 10) - 1), 0);
+  EXPECT_EQ((entry >> 52) & ((1 << 10) - 1), 0ul);
 
   return phys;
 }

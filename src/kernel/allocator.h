@@ -1,12 +1,11 @@
 #ifndef allocator_h
 #define allocator_h
 
-#include "frame_allocator.h"
-#include "linked_list.h"
-#include "page_translation.h"
-#include "types.h"
-
-#include <new>
+#include "base/linked_list.h"
+#include "base/placement_new.h"
+#include "base/types.h"
+#include "kernel/frame_allocator.h"
+#include "kernel/page_translation.h"
 
 template<typename T>
 class Allocator {

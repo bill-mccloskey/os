@@ -1,5 +1,6 @@
 #include "multiboot.h"
-#include "types.h"
+
+#include "base/types.h"
 
 static const int kMultibootModuleTag = 3;
 static const int kMultibootMemoryMapTag = 6;

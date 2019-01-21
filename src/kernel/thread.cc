@@ -1,11 +1,11 @@
 #include "thread.h"
 
-#include "assertions.h"
-#include "frame_allocator.h"
-#include "interrupts.h"
-#include "page_translation.h"
-#include "protection.h"
-#include "serial.h"
+#include "base/assertions.h"
+#include "kernel/frame_allocator.h"
+#include "kernel/interrupts.h"
+#include "kernel/page_translation.h"
+#include "kernel/protection.h"
+#include "kernel/serial.h"
 
 Scheduler* g_scheduler;
 int g_thread_id = 32;
@@ -217,7 +217,7 @@ void Scheduler::Start() {
 
 void Scheduler::DumpState() {
   Thread* thread = running_thread_;
-  g_serial->Printf("rip = %p\n", (void*)thread->state_.rip);
+  g_serial->Printf("tid = %d; rip = %p\n", thread->id(), (void*)thread->state_.rip);
 }
 
 void Scheduler::AddThread(Thread* thread) {

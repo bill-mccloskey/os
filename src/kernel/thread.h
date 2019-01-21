@@ -1,10 +1,10 @@
 #ifndef thread_h
 #define thread_h
 
-#include "address_space.h"
-#include "allocator.h"
-#include "linked_list.h"
-#include "types.h"
+#include "base/linked_list.h"
+#include "base/types.h"
+#include "kernel/address_space.h"
+#include "kernel/allocator.h"
 
 class Scheduler;
 

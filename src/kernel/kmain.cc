@@ -1,20 +1,23 @@
-#include <new>
+#include "base/io.h"
+#include "base/lazy_global.h"
+#include "base/placement_new.h"
+#include "base/types.h"
+#include "kernel/allocator.h"
+#include "kernel/elf.h"
+#include "kernel/frame_allocator.h"
+#include "kernel/interrupts.h"
+#include "kernel/loader.h"
+#include "kernel/multiboot.h"
+#include "kernel/page_tables.h"
+#include "kernel/page_translation.h"
+#include "kernel/protection.h"
+#include "kernel/serial.h"
+#include "kernel/thread.h"
 
-#include "allocator.h"
-#include "elf.h"
-#include "frame_allocator.h"
-#include "interrupts.h"
-#include "io.h"
-#include "lazy_global.h"
-#include "loader.h"
-#include "multiboot.h"
-#include "page_tables.h"
-#include "page_translation.h"
-#include "protection.h"
-#include "serial.h"
-#include "string.h"
-#include "thread.h"
-#include "types.h"
+#include <string.h>
+
+uintptr_t g_kernel_virtual_start = 0xffff800000000000;
+intptr_t g_kernel_virtual_offset = 0xffff800000000000;
 
 namespace {
 

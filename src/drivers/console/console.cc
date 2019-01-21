@@ -1,11 +1,11 @@
-#include "assertions.h"
-#include "raster_frame_buffer.h"
-#include "text_frame_buffer.h"
-#include "emulator.h"
-#include "io.h"
-#include "kernel_module.h"
-#include "output_stream.h"
-#include "system.h"
+#include "base/assertions.h"
+#include "base/io.h"
+#include "base/kernel_module.h"
+#include "base/output_stream.h"
+#include "drivers/console/raster_frame_buffer.h"
+#include "drivers/console/text_frame_buffer.h"
+#include "drivers/console/emulator.h"
+#include "usr/system.h"
 
 class DebugOutputStream : public OutputStream {
 public:

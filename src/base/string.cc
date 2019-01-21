@@ -1,5 +1,7 @@
 #include "string.h"
 
+#ifndef TEST_BUILD
+
 void* memset(void* s, int c, size_t n) {
   for (size_t i = 0; i < n; i++) {
     ((char*)s)[i] = c;
@@ -22,3 +24,5 @@ int memcmp(const void* s1, const void* s2, size_t n) {
   }
   return 0;
 }
+
+#endif

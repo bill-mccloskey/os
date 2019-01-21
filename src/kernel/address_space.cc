@@ -1,14 +1,16 @@
 #include "address_space.h"
-#include "frame_allocator.h"
-#include "page_translation.h"
-#include "string.h"
-#include "thread.h"
+
+#include "kernel/frame_allocator.h"
+#include "kernel/page_translation.h"
+#include "kernel/thread.h"
+
+#include <string.h>
 
 static const virt_addr_t kStackBase = virt_addr_t(0x7ffffffff000);
 
 AddressSpace::AddressSpace() {
   const size_t kMaxRAMSize = 64 * (uint64_t(1) << 30);
-  page_tables_.Map(0, kMaxRAMSize, kKernelVirtualStart, kKernelVirtualStart + kMaxRAMSize, PageAttributes());
+  page_tables_.Map(0, kMaxRAMSize, g_kernel_virtual_start, g_kernel_virtual_start + kMaxRAMSize, PageAttributes());
 }
 
 Thread* AddressSpace::CreateThread(virt_addr_t start_func, int priority,

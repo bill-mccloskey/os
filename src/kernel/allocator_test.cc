@@ -42,7 +42,7 @@ TEST(AllocatorTest, Random) {
       obj->a = obj->b = i;
       uintptr_t addr = reinterpret_cast<uintptr_t>(obj);
       uintptr_t offset = addr & (kPageSize - 1);
-      EXPECT_EQ(offset % decltype(alloc)::kAllocationSize, 0);
+      EXPECT_EQ(offset % decltype(alloc)::kAllocationSize, uintptr_t(0));
       auto result = allocations.insert(std::make_pair(addr, i));
       EXPECT_TRUE(result.second);
     } else if (r == 1) {
@@ -51,8 +51,8 @@ TEST(AllocatorTest, Random) {
       std::advance(iter, random() % allocations.size());
       auto kv = *iter;
       SimpleObject* obj = reinterpret_cast<SimpleObject*>(kv.first);
-      EXPECT_EQ(obj->a, kv.second);
-      EXPECT_EQ(obj->b, kv.second);
+      EXPECT_EQ(obj->a, uint64_t(kv.second));
+      EXPECT_EQ(obj->b, uint64_t(kv.second));
       alloc.Deallocate(obj);
       allocations.erase(iter);
     } else {
@@ -61,8 +61,8 @@ TEST(AllocatorTest, Random) {
       std::advance(iter, random() % allocations.size());
       auto kv = *iter;
       SimpleObject* obj = reinterpret_cast<SimpleObject*>(kv.first);
-      EXPECT_EQ(obj->a, kv.second);
-      EXPECT_EQ(obj->b, kv.second);
+      EXPECT_EQ(obj->a, uint64_t(kv.second));
+      EXPECT_EQ(obj->b, uint64_t(kv.second));
     }
   }
 }

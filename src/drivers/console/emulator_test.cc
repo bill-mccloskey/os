@@ -112,6 +112,7 @@ protected:
   TerminalEmulator em;
 };
 
+#if 0
 static std::string ReadTestData(const char* test_name) {
   char buffer[8192];
   std::string test_data = g_test_dir + "/" + test_name + ".data";
@@ -155,6 +156,7 @@ TEST_F(EmulatorTest, Alpine) {
     printf("\n");
   }
 }
+#endif
 
 TEST_F(EmulatorTest, BackspaceTest) {
   InputString("a\bb");

@@ -1,7 +1,7 @@
 #ifndef multiboot_h
 #define multiboot_h
 
-#include "types.h"
+#include "base/types.h"
 
 enum class MemoryMapEntryType : uint32_t {
   kAvailableRAM = 1,

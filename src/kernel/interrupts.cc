@@ -1,10 +1,10 @@
 #include "interrupts.h"
 
-#include "assertions.h"
-#include "io.h"
-#include "serial.h"
-#include "thread.h"
-#include "types.h"
+#include "base/assertions.h"
+#include "base/io.h"
+#include "base/types.h"
+#include "kernel/serial.h"
+#include "kernel/thread.h"
 
 static const int kPrimaryCommandPort = 0x20;
 static const int kPrimaryDataPort = 0x21;
@@ -158,7 +158,7 @@ void InterruptController::UnregisterForInterrupts(Thread* thread) {
 }
 
 void InterruptController::Interrupt(int irq) {
-  g_serial->Printf("IRQ %d received\n", irq);
+  //g_serial->Printf("IRQ %d received\n", irq);
 
   assert_lt(irq, kMaxIRQs);
   if (registrations_[irq]) {

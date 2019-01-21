@@ -1,6 +1,6 @@
-#include "keyboard.h"
-#include "output_stream.h"
-#include "system.h"
+#include "base/output_stream.h"
+#include "usr/keyboard.h"
+#include "usr/system.h"
 
 class DebugOutputStream : public OutputStream {
 public:

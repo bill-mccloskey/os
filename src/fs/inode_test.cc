@@ -1,6 +1,5 @@
-#include "inode.h"
-
-#include "assertions.h"
+#include "fs/inode.h"
+#include "base/assertions.h"
 
 #include "gtest/gtest.h"
 
@@ -60,13 +59,13 @@ TEST_F(InodeTest, Basic) {
   InodeHandle* h1;
   ASSERT_EQ(fs->AllocateInode(&h1), ErrorCode::kOk);
 
-  ASSERT_EQ(h1->Length(), 0);
+  ASSERT_EQ(h1->Length(), 0ul);
   block_number_t num;
   ASSERT_EQ(h1->GetDataBlock(0, &num), ErrorCode::kFileTooSmall);
 
   ASSERT_EQ(h1->SetLength(10), ErrorCode::kOk);
   ASSERT_EQ(h1->GetDataBlock(0, &num), ErrorCode::kOk);
-  ASSERT_EQ(num, 4);
+  ASSERT_EQ(num, 4ul);
 
   InodeHandle* h2;
   ASSERT_EQ(fs->AllocateInode(&h2), ErrorCode::kOk);

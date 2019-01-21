@@ -1,0 +1,76 @@
+== Buffer cache ==
+
+== Message passing ==
+
+== Process model for file system ==
+
+== File system ==
+
+Need to have an inode data structure. It will keep track of file system metadata as well
+as pointers to the blocks where file data is stored. There will be a superblock that will
+point to the root directory inode number. The block size will be 4K.
+
+struct inode {
+  int32 ctime, mtime;
+  int16 refcount;
+  int16 mode;
+  int16 uid, gid;
+  uint64 file_length;
+
+};
+
+Will the API be synchronous or asynchronous? Seems like async would be much better. I can
+always make it sync as needed.
+
+Disk will be divided into allocation groups. Each AG has a copy of the superblock.
+Each one also has a fixed number of inodes, as well as a bitmap of blocks (allocated or not).
+
+Interface with disk API:
+Ask buffer cache for a particular block from the disk. Will get a pointer to the block.
+Ask to sync a particular block to the disk. Pass it a pointer to the block. Get callback when done?
+Release a block that we got from the disk.
+
+Will I keep any particular areas in memory at all times? Perhaps the initial superblock?
+
+Directory structure will be a linear list of unsorted dirents.
+
+Low-level filesystem API (directories and symlinks would be built on top of this):
+
+Inodes:
+Get the data for a given inode
+Allocate a new inode
+Increment inode refcount
+Decrement inode refcount
+
+File data:
+Given offset into file, return block, block offset, and block length
+Set file length to N.
+
+Bytecode for truncating a file:
+
+Truncate(cur_block_offset, block, level):
+  block_contents = fetch(block)
+  for each entry in block_contents:
+    tree_size is the number of blocks in that subtree
+    if cur_block_offset + tree_size <= target_block_count:
+      continue
+    else if cur_block_offset <= target_block_count:
+      Truncate(cur_block_offset, entry, level - 1)
+    else if cur_block_offset <= old_block_count:
+      FreeSubtree(entry, level)
+    else:
+      break
+    cur_block_offset += tree_size
+
+FreeSubtree(block, level):
+  if level == 0:
+    FreeBlock(block)
+  else:
+    block_contents = fetch(block)
+    for each entry in block_contents:
+      FreeSubtree(entry, level - 1)
+
+FreeBlock(block):
+  find block number for bitmap
+  bitmap = fetch(bitmap_block_number)
+  clear bit in bitmap

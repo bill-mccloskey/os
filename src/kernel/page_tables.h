@@ -1,7 +1,7 @@
 #ifndef page_tables_h
 #define page_tables_h
 
-#include "types.h"
+#include "base/types.h"
 
 class PageAttributes {
 public:
