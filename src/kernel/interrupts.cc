@@ -21,7 +21,7 @@ extern "C" {
 void kinterrupt(int64_t interrupt_number, uint64_t error_code) {
   // GPF
   if (interrupt_number == 13) {
-    g_serial->Printf("GPF: error=%u\n", uint32_t(error_code));
+    LOG(ERROR).Printf("GPF: error=%u", uint32_t(error_code));
     g_scheduler->DumpState();
     for (;;) {
       asm("hlt");
@@ -30,7 +30,7 @@ void kinterrupt(int64_t interrupt_number, uint64_t error_code) {
 
   // Page fault.
   if (interrupt_number == 14) {
-    g_serial->Printf("Page fault: error=%u\n", uint32_t(error_code));
+    LOG(ERROR).Printf("Page fault: error=%u", uint32_t(error_code));
     g_scheduler->DumpState();
     for (;;) {
       asm("hlt");
@@ -49,7 +49,7 @@ void InterruptController::Init() {
   unsigned char mask1 = io_->In(kPrimaryDataPort);
   unsigned char mask2 = io_->In(kSecondaryDataPort);
 
-  g_serial->Printf("Interrupt masks = %x/%x\n", mask1, mask2);
+  LOG(INFO).Printf("Interrupt masks = %x/%x", mask1, mask2);
 
   const int kICW1_Init = 0x10;
   const int kICW1_ICW4 = 0x01;
@@ -158,14 +158,14 @@ void InterruptController::UnregisterForInterrupts(Thread* thread) {
 }
 
 void InterruptController::Interrupt(int irq) {
-  //g_serial->Printf("IRQ %d received\n", irq);
+  LOG(DEBUG).Printf("IRQ %d received", irq);
 
   assert_lt(irq, kMaxIRQs);
   if (registrations_[irq]) {
     Thread* thread = registrations_[irq];
     thread->NotifyFromKernel();
   } else {
-    g_serial->Printf("Acknowledging because no handler installed\n");
+    LOG(DEBUG).Printf("Acknowledging because no handler installed");
     Acknowledge(irq);
   }
 }

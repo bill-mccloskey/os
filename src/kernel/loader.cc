@@ -15,7 +15,7 @@ public:
   ElfLoaderVisitor(const RefPtr<AddressSpace>& as) : address_space_(as) {}
 
   void LoadSegment(int flags, const char* data, size_t size, virt_addr_t load_addr, size_t load_size) override {
-    g_serial->Printf("  Loading segment (flags=%d) at %p, size=%d/%d\n", flags, (void*)load_addr, (int)size, (int)load_size);
+    LOG(INFO).Printf("  Loading segment (flags=%d) at %p, size=%d/%d", flags, (void*)load_addr, (int)size, (int)load_size);
 
     assert_le(size, load_size);
 
@@ -128,7 +128,7 @@ static void ParseArguments(const char* args, MultibootDataVisitor* data, const R
 
       phys_addr_t start = ParseNum(16, value, comma);
       phys_addr_t end = ParseNum(16, comma + 1, end_value);
-      g_serial->Printf("Mapping to userspace: %p to %p\n", (void*)start, (void*)end);
+      LOG(INFO).Printf("Mapping to userspace: %p to %p", (void*)start, (void*)end);
       as->Map(start, end, start, end, PageAttributes());
     } else if (StringIs(key, end_key, "videomap")) {
       if (StringIs(value, end_value, "true")) {
@@ -165,7 +165,7 @@ public:
   MultibootLoaderVisitor(MultibootDataVisitor* data) : data_(data) {}
 
   void Module(const char* args, uint32_t module_start, uint32_t module_end) override {
-    g_serial->Printf("Loading module %s\n", args);
+    LOG(INFO).Printf("Loading module %s", args);
 
     RefPtr<AddressSpace> as = new AddressSpace();
 

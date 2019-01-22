@@ -1,8 +1,8 @@
 #include "inode.h"
 #include "base/assertions.h"
+#include "base/testing.h"
 
-// FIXME: Need some kind of logging facility that works in the kernel and in tests and in userspace.
-// Need test infrastructure for doing test-only callbacks/logging that can be tested against.
+// FIXME:
 // Should fix BlockHandle so that it's RAII. Needing to clean up manually is silly.
 // Need a way to test that I've released all blocks.
 // Need a way to test that I called SetDirty on all blocks that have changed.
@@ -551,6 +551,8 @@ ErrorCode FileSystem::AllocateDataBlock(BlockHandle** result) {
           bits[byte] |= (1 << bit);
           data_bitmap_blocks_[i]->SetDirty();
 
+          TEST_ONLY(env_->Test_DataBlockAllocated(block));
+
           return env_->FetchBlock(block, result);
         }
       }
@@ -576,6 +578,8 @@ void FileSystem::FreeDataBlock(block_number_t block) {
   bits[bitmap_block_index] &= ~(1 << bit);
 
   handle->SetDirty();
+
+  TEST_ONLY(env_->Test_DataBlockDeallocated(block));
 
   env_->FreeBlock(block);
 }

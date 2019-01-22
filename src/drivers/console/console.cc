@@ -7,13 +7,6 @@
 #include "drivers/console/emulator.h"
 #include "usr/system.h"
 
-class DebugOutputStream : public OutputStream {
-public:
-  void OutputChar(char c) override {
-    SysWriteByte(c);
-  }
-};
-
 // Line discipline: You put characters from the keyboard (or whatever) into it.
 // It keeps a buffer for the program to read from. It also decides when that buffer
 // should be "released" to the program. Finally, it decides what characters should
@@ -129,10 +122,8 @@ private:
 
 extern "C" {
 void _start(KernelModuleData* module_data) {
-  DebugOutputStream stream;
-
-  stream.Printf("terminal: Hello from the terminal!\n");
-  stream.Printf("terminal: framebuffer is %u x %u\n", module_data->framebuffer.width, module_data->framebuffer.height);
+  LOG(INFO).Printf("terminal: Hello from the terminal!");
+  LOG(INFO).Printf("terminal: framebuffer is %u x %u", module_data->framebuffer.width, module_data->framebuffer.height);
 
   //IoPorts io;
   //TextFrameBuffer fb((char*)0xb8000, &io);

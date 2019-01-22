@@ -89,6 +89,7 @@ lib(
         'base/output_stream.h',
         'base/placement_new.h',
         'base/refcount.h',
+        'base/testing.h',
         'base/types.h',
     ],
     hdrs=[

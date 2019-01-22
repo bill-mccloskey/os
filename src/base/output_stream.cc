@@ -2,6 +2,14 @@
 
 #include <stdarg.h>
 
+#ifdef TEST_BUILD
+#include <stdio.h>
+#elif KERNEL_BUILD
+#include "kernel/serial.h"
+#elif TASK_BUILD
+#include "usr/system.h"
+#endif
+
 void OutputStream::OutputString(const char* s) {
   for (int i = 0; s[i]; i++) {
     OutputChar(s[i]);
@@ -134,4 +142,89 @@ void OutputStream::Printf(const char* fmt, ...) {
   }
 
   va_end(args);
+}
+
+OutputStream& OutputStream::operator<<(const char* s) {
+  OutputString(s);
+  return *this;
+}
+
+OutputStream& OutputStream::operator<<(int x) {
+  char buf[32];
+  SignedNumToString(x, buf, 10);
+  OutputString(buf);
+  return *this;
+}
+
+OutputStream& OutputStream::operator<<(unsigned int x) {
+  char buf[32];
+  UnsignedNumToString(x, buf, 10);
+  OutputString(buf);
+  return *this;
+}
+
+OutputStream& OutputStream::operator<<(long x) {
+  char buf[32];
+  SignedNumToString(x, buf, 10);
+  OutputString(buf);
+  return *this;
+}
+
+OutputStream& OutputStream::operator<<(unsigned long x) {
+  char buf[32];
+  UnsignedNumToString(x, buf, 10);
+  OutputString(buf);
+  return *this;
+}
+
+OutputStream& OutputStream::operator<<(void* x) {
+  char buf[32];
+  UnsignedNumToString((unsigned long)x, buf, 16);
+  OutputString("0x");
+  OutputString(buf);
+  return *this;
+}
+
+OutputStream& OutputStream::operator<<(bool x) {
+  if (x) {
+    OutputString("true");
+  } else {
+    OutputString("false");
+  }
+  return *this;
+}
+
+namespace {
+
+class LogOutputStream : public OutputStream {
+public:
+  void OutputChar(char c) override {
+#ifdef TASK_BUILD
+    SysWriteByte(c);
+#elif KERNEL_BUILD
+    g_serial->OutputChar(c);
+#elif TEST_BUILD
+    putchar(c);
+#endif
+  }
+};
+
+class NullOutputStream : public OutputStream {
+public:
+  void OutputChar(char c) override {}
+};
+
+}
+
+TerminatingOutputStream Log(const char* filename, int line, LogLevel level) {
+  if (level == DEBUG) {
+    static NullOutputStream stream;
+    TerminatingOutputStream tmp(stream);
+    return tmp;
+  } else {
+    static LogOutputStream stream;
+    TerminatingOutputStream tmp(stream);
+    tmp.Printf("%s:%d: ", filename, line);
+    return tmp;
+  }
 }

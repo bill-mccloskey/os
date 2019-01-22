@@ -39,6 +39,9 @@ public:
   virtual ErrorCode FreeBlock(block_number_t block) = 0;
 
   virtual uint64_t Now() = 0;
+
+  virtual void Test_DataBlockAllocated(block_number_t block) {}
+  virtual void Test_DataBlockDeallocated(block_number_t block) {}
 };
 
 class FileSystem;

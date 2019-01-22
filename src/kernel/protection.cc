@@ -266,11 +266,11 @@ void VM::Load(virt_addr_t syscall_stack_top) {
 
   env_->LoadTSS(SegmentSelector(kTSSIndex));
 
-  g_serial->Printf("Handler table = %p\n", interrupt_handler_table);
+  LOG(INFO).Printf("Handler table = %p", interrupt_handler_table);
 
   for (int i = 0; interrupt_handler_table[i].handler != 0; i++) {
     const InterruptHandlerEntry& entry = interrupt_handler_table[i];
-    g_serial->Printf("Handler %d = %d/%p\n", i, entry.number, (void*)entry.handler);
+    LOG(DEBUG).Printf("Handler %d = %d/%p", i, entry.number, (void*)entry.handler);
     AddIDTEntry(entry.number, InterruptDescriptor().set_offset(entry.handler).set_interrupt_stack(1));
   }
 

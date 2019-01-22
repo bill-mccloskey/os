@@ -4,20 +4,6 @@
 #include "usr/keyboard.h"
 #include "usr/system.h"
 
-class DebugOutputStream : public OutputStream {
-public:
-  void OutputChar(char c) override {
-    SysWriteByte(c);
-  }
-};
-
-class ConsoleOutputStream : public OutputStream {
-public:
-  void OutputChar(char c) override {
-    SysSend(1, 0, c);
-  }
-};
-
 static const int kMsgReadReply = 7387;
 
 struct ScanCodeInfo {
@@ -308,10 +294,7 @@ void _start() {
   //outb(0x60, 0);
   //kbd_ack();
 
-  DebugOutputStream stream;
-  ConsoleOutputStream console;
-
-  stream.Printf("keyboard: Starting up!\n");
+  LOG(INFO).Printf("keyboard: Starting up!");
 
   SysRequestInterrupt(1);
 
@@ -333,7 +316,7 @@ void _start() {
     SysReceive(&sender, &type, &payload);
 
     if (sender) {
-      //stream.Printf("keyboard: Got key request\n");
+      LOG(DEBUG).Printf("keyboard: Got key request");
       if (buffer_start == buffer_end) {
         requestors[num_requests++] = sender;
       } else {
@@ -345,8 +328,6 @@ void _start() {
     }
 
     //Delay();
-
-    //console.Printf("Got key interrupt\r\n");
 
     unsigned char scan_code = inb(0x60);
     if (scan_code == 0xe0) {
@@ -404,30 +385,27 @@ void _start() {
         }
       }
 
-#if 0
+      TerminatingOutputStream log = LOG(DEBUG);
       if (keyup) {
-        stream.Printf("keyboard: keyup ");
+        log.Printf("keyboard: keyup ");
       } else {
-        stream.Printf("keyboard: keydown ");
+        log.Printf("keyboard: keydown ");
       }
 
-      DescribeKey(key, &stream);
+      DescribeKey(key, &log);
 
       if (modifiers & kModShift) {
-        stream.Printf("[shift]");
+        log.Printf("[shift]");
       }
       if (modifiers & kModAlt) {
-        stream.Printf("[alt]");
+        log.Printf("[alt]");
       }
       if (modifiers & kModControl) {
-        stream.Printf("[control]");
+        log.Printf("[control]");
       }
       if (modifiers & kModMeta) {
-        stream.Printf("[meta]");
+        log.Printf("[meta]");
       }
-
-      stream.Printf("\n");
-#endif
     }
 
     SysAckInterrupt(1);
