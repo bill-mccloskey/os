@@ -8,6 +8,7 @@
 
 class Scheduler;
 
+// Warning: Any changes to this structure must be reflected in interrupt_handlers.s:thread_state.
 struct ThreadState {
   // Automatically pushed to the stack during interrupt handling.
   uint64_t rip;
@@ -16,8 +17,8 @@ struct ThreadState {
   uint64_t rsp;
   uint64_t ss;
 
-  // Callee-saved registers.
   uint64_t rax;
+  uint64_t rbx;
   uint64_t rcx;
   uint64_t rdx;
   uint64_t rsi;
@@ -26,6 +27,12 @@ struct ThreadState {
   uint64_t r9;
   uint64_t r10;
   uint64_t r11;
+  uint64_t r12;
+  uint64_t r13;
+  uint64_t r14;
+  uint64_t r15;
+
+  uint64_t rbp;
 };
 
 struct CpuState {

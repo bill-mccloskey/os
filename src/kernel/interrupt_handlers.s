@@ -6,6 +6,7 @@ global syscall_handler
 global SchedulerStart
 global SwitchAddressSpace
 
+; Warning: Any changes to this structure must be reflected in thread.h:ThreadState.
 struc thread_state
 ts_rip: resb 8
 ts_cs: resb 8
@@ -13,6 +14,7 @@ ts_rflags: resb 8
 ts_rsp: resb 8
 ts_ss: resb 8
 ts_rax: resb 8
+ts_rbx: resb 8
 ts_rcx: resb 8
 ts_rdx: resb 8
 ts_rsi: resb 8
@@ -21,6 +23,11 @@ ts_r8: resb 8
 ts_r9: resb 8
 ts_r10: resb 8
 ts_r11: resb 8
+ts_r12: resb 8
+ts_r13: resb 8
+ts_r14: resb 8
+ts_r15: resb 8
+ts_rbp: resb 8
 endstruc
 
 struc cpu_state
@@ -67,6 +74,7 @@ SwitchAddressSpace:
   ;   CpuState::current_thread [rsp + 0]
 
   mov rax, qword[rsp]           ; Copy CpuState::current_thread to rax
+  mov rbx, qword[rax + ts_rbx]
   mov rcx, qword[rax + ts_rcx]
   mov rdx, qword[rax + ts_rdx]
   mov rsi, qword[rax + ts_rsi]
@@ -75,12 +83,20 @@ SwitchAddressSpace:
   mov r9, qword[rax + ts_r9]
   mov r10, qword[rax + ts_r10]
   mov r11, qword[rax + ts_r11]
+  mov r12, qword[rax + ts_r12]
+  mov r13, qword[rax + ts_r13]
+  mov r14, qword[rax + ts_r14]
+  mov r15, qword[rax + ts_r15]
+  mov rbp, qword[rax + ts_rbp]
   push qword[rax + ts_ss]
   push qword[rax + ts_rsp]
   push qword[rax + ts_rflags]
   push qword[rax + ts_cs]
   push qword[rax + ts_rip]
   mov rax, qword[rax + ts_rax]
+
+  ; At this point, we should be in a state where iretq will finish
+  ; restoring the state.
 %endmacro
 
 syscall_handler:
@@ -106,6 +122,14 @@ syscall_handler:
   pop qword[r10 + ts_rflags]
   pop qword[r10 + ts_rsp]
   pop qword[r10 + ts_ss]
+
+  ; Callee-saved, so we need to save them.
+  mov qword[r10 + ts_rbx], rbx
+  mov qword[r10 + ts_r12], r12
+  mov qword[r10 + ts_r13], r13
+  mov qword[r10 + ts_r14], r14
+  mov qword[r10 + ts_r15], r15
+  mov qword[r10 + ts_rbp], rbp
 
   mov r10, syscall_handler_table
   mov r11, qword[r10 + rax * 8]
@@ -146,12 +170,18 @@ common_interrupt_handler:
   pop qword[rax + ts_rflags]
   pop qword[rax + ts_rsp]
   pop qword[rax + ts_ss]
+  mov qword[rax + ts_rbx], rbx
   mov qword[rax + ts_rcx], rcx
   mov qword[rax + ts_rdx], rdx
   mov qword[rax + ts_r8], r8
   mov qword[rax + ts_r9], r9
   mov qword[rax + ts_r10], r10
   mov qword[rax + ts_r11], r11
+  mov qword[rax + ts_r12], r12
+  mov qword[rax + ts_r13], r13
+  mov qword[rax + ts_r14], r14
+  mov qword[rax + ts_r15], r15
+  mov qword[rax + ts_rbp], rbp
 
   ; Call kinterrupt(interrupt_number, error_code)
   call kinterrupt

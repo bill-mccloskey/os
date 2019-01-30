@@ -1,3 +1,4 @@
+#include "base/assertions.h"
 #include "base/io.h"
 #include "base/output_stream.h"
 #include "base/types.h"
@@ -244,7 +245,7 @@ static void DescribeKey(const KeyInfo& info, OutputStream* stream) {
       break;
 
     default:
-      stream->Printf("unknown");
+      stream->Printf("unknown type(%d)", info.type);
       break;
   }
 

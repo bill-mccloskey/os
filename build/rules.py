@@ -267,7 +267,6 @@ class FreestandingCppTarget(CppTarget):
             '-mno-mmx',
             '-mno-sse',
             '-mno-sse2',
-            '-fomit-frame-pointer',
             '-fno-rtti',
             '-fno-exceptions',
             '-fno-asynchronous-unwind-tables',
