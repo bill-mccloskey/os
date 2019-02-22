@@ -177,6 +177,20 @@ OutputStream& OutputStream::operator<<(unsigned long x) {
   return *this;
 }
 
+OutputStream& OutputStream::operator<<(long long x) {
+  char buf[32];
+  SignedNumToString(x, buf, 10);
+  OutputString(buf);
+  return *this;
+}
+
+OutputStream& OutputStream::operator<<(unsigned long long x) {
+  char buf[32];
+  UnsignedNumToString(x, buf, 10);
+  OutputString(buf);
+  return *this;
+}
+
 OutputStream& OutputStream::operator<<(void* x) {
   char buf[32];
   UnsignedNumToString((unsigned long)x, buf, 16);
@@ -205,6 +219,7 @@ public:
     g_serial->OutputChar(c);
 #elif TEST_BUILD
     putchar(c);
+    fflush(stdout);
 #endif
   }
 };

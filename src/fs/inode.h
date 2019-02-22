@@ -10,8 +10,6 @@
 using block_number_t = uint64_t;
 using inode_number_t = uint64_t;
 
-static const int kBlockSize = 4096;
-
 enum class ErrorCode {
   kOk,
   kReadError,
@@ -78,6 +76,12 @@ public:
 
   ErrorCode GetDataBlock(uint64_t block_index, block_number_t* result) MUST_USE;
 
+  BlockHandle* TEST_GetBlock() { return inode_block_; }
+  block_number_t* TEST_GetTrees();
+  uint64_t TEST_GetTreeSizeInBlocks();
+
+  uint64_t SubtreesPerBlock();
+
 private:
   struct InodeLayout;
 
@@ -90,14 +94,13 @@ private:
               InodeHandle::InodeLayout* layout);
   ~InodeHandle();
 
-  uint64_t ComputeTreeSize(uint64_t len);
-
   ErrorCode AllocateDataBlocks(uint64_t data_block_index,
                                block_number_t* subtrees,
                                int subtree_count,
                                uint64_t subtree_size,
                                uint64_t cur_blocks,
-                               uint64_t new_blocks);
+                               uint64_t new_blocks,
+                               uint64_t* end_block);
 
   ErrorCode FreeDataBlocks(uint64_t data_block_index,
                            block_number_t* subtrees,
@@ -121,7 +124,11 @@ private:
 class FileSystem {
 public:
   static ErrorCode Mount(FileSystemEnv* env, FileSystem** result) MUST_USE;
-  static ErrorCode Create(FileSystemEnv* env, uint64_t num_blocks, uint64_t max_inodes, FileSystem** result) MUST_USE;
+  static ErrorCode Create(FileSystemEnv* env,
+                          uint64_t block_size,
+                          uint64_t num_blocks,
+                          uint64_t max_inodes,
+                          FileSystem** result) MUST_USE;
 
   void Unmount();
 
@@ -129,6 +136,14 @@ public:
   ErrorCode AllocateInode(InodeHandle** result) MUST_USE;
 
   FileSystemEnv* env() const { return env_; }
+  uint64_t block_size() const { return block_size_; }
+
+  uint64_t ComputeTreeSize(uint64_t len);
+  uint64_t SubtreesPerBlock() const;
+  uint64_t ComputeTotalBlockUsage(uint64_t len);
+
+  bool TEST_IsBlockAllocated(block_number_t block);
+  uint64_t TEST_NumDataBlocksUsed();
 
 private:
   struct SuperBlockLayout;
@@ -141,9 +156,10 @@ private:
 
   void FindInode(inode_number_t inode, block_number_t* block, int* index);
 
-  FileSystem(FileSystemEnv* env, BlockHandle* superblock, BlockHandle** block_bitmap);
+  FileSystem(FileSystemEnv* env, uint64_t block_size, BlockHandle* superblock, BlockHandle** block_bitmap);
 
   FileSystemEnv* env_;
+  uint64_t block_size_;
   BlockHandle* superblock_;
   SuperBlockLayout* superblock_layout_;
 

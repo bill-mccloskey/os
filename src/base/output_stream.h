@@ -13,6 +13,8 @@ public:
   OutputStream& operator<<(unsigned int x);
   OutputStream& operator<<(long x);
   OutputStream& operator<<(unsigned long x);
+  OutputStream& operator<<(long long x);
+  OutputStream& operator<<(unsigned long long x);
   OutputStream& operator<<(void* x);
   OutputStream& operator<<(bool x);
 };

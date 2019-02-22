@@ -161,8 +161,6 @@ class CppTarget(graph.Target):
             if file_date(filename) > target_ts:
                 return False
 
-        print('interface ts =', self.interface_timestamp())
-        print('target ts =', target_ts)
         return target_ts >= self.interface_timestamp()
 
     def asm_flags(self):
@@ -289,6 +287,16 @@ class TaskTarget(FreestandingCppTarget):
     def __init__(self, name, location, args):
         super().__init__(name, location, args)
 
+    def is_up_to_date(self):
+        if not super().is_up_to_date():
+            return False
+
+        for dep in self.transitive_deps():
+            if dep.target_timestamp() > self.target_timestamp():
+                return False
+
+        return True
+
     def build_final(self, sb, objfiles, targetfile):
         dep_targets = []
         for dep in self.transitive_deps():
@@ -299,6 +307,16 @@ class TaskTarget(FreestandingCppTarget):
 class KernelTarget(FreestandingCppTarget):
     def __init__(self, name, location, args):
         super().__init__(name, location, args)
+
+    def is_up_to_date(self):
+        if not super().is_up_to_date():
+            return False
+
+        for dep in self.transitive_deps():
+            if dep.target_timestamp() > self.target_timestamp():
+                return False
+
+        return True
 
     def build_final(self, sb, objfiles, targetfile):
         dep_targets = []
@@ -331,6 +349,16 @@ class TestTarget(CppTarget):
 
     def cc_flags(self, mode):
         return super().cc_flags(mode) + ['-pthread']
+
+    def is_up_to_date(self):
+        if not super().is_up_to_date():
+            return False
+
+        for dep in self.transitive_deps():
+            if dep.target_timestamp() > self.target_timestamp():
+                return False
+
+        return True
 
     def build_final(self, sb, objfiles, targetfile):
         dep_targets = []

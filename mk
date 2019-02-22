@@ -79,6 +79,7 @@ lib(
         'base/output_stream.cc',
         'base/placement_new.cc',
         'base/string.cc',
+        'base/testing.cc',
     ],
     public_hdrs=[
         'base/assertions.h',
